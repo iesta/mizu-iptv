@@ -8,6 +8,7 @@ arrondi dégradé. Sorties :
     app/assets/logo_256.png     256 px (icône de fenêtre Linux)
     app/assets/logo_mark.png    512 px, glyphe seul sur fond transparent
     app/android/.../mipmap-*/   icônes de lancement Android (si le dossier existe)
+    app/macos/.../AppIcon.appiconset  icônes macOS (si le dossier existe)
 
 Usage : python3 tools/make_icons.py
 """
@@ -135,6 +136,27 @@ def write_android(logo: Image.Image) -> None:
     print("icônes Android + bannière TV écrites")
 
 
+def write_macos(logo: Image.Image) -> None:
+    iconset = os.path.join(
+        ROOT, "app", "macos", "Runner", "Assets.xcassets", "AppIcon.appiconset"
+    )
+    if not os.path.isdir(iconset):
+        return
+    # Noms attendus par le Contents.json du template Flutter.
+    sizes = {
+        "app_icon_16.png": 16,
+        "app_icon_32.png": 32,
+        "app_icon_64.png": 64,
+        "app_icon_128.png": 128,
+        "app_icon_256.png": 256,
+        "app_icon_512.png": 512,
+        "app_icon_1024.png": 1024,
+    }
+    for name, px in sizes.items():
+        logo.resize((px, px), Image.LANCZOS).save(os.path.join(iconset, name))
+    print("icônes macOS écrites")
+
+
 def main() -> None:
     assets = os.path.join(ROOT, "app", "assets")
     os.makedirs(assets, exist_ok=True)
@@ -148,6 +170,7 @@ def main() -> None:
     print("assets écrits : logo.png, logo_256.png, logo_mark.png")
 
     write_android(logo)
+    write_macos(logo)
 
 
 if __name__ == "__main__":
