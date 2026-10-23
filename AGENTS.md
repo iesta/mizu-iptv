@@ -5,8 +5,9 @@ synchronise avec un compte **Zen IPTV** (backend Supabase). Projet
 d'interopérabilité, licence MIT, aucune ressource de l'app d'origine n'est
 embarquée.
 
-Lire d'abord : [`README.md`](README.md) (usage), [`re/PROTOCOL.md`](re/PROTOCOL.md)
-(protocole observé), [`re/supabase/`](re/supabase/) (schéma + export).
+Lire d'abord : [`README.md`](README.md) (usage), [`TODO.md`](TODO.md) (état des
+tâches et pistes mises de côté), [`re/PROTOCOL.md`](re/PROTOCOL.md) (protocole
+observé), [`re/supabase/`](re/supabase/) (schéma + export).
 
 ## État par plateforme
 
@@ -107,12 +108,13 @@ tools/make_icons.py            logo 水 → assets Linux/Android/macOS
   `channel`. Les TMDB ids sont résolus par l'index local du catalogue
   (`CatalogIndex`), pas par l'API TMDB (clé optionnelle).
 
-## Reste à faire (par ordre suggéré)
+## Reste à faire
 
-1. Compiler et valider macOS (ci-dessus).
-2. Direct : masquer la barre de seek quand `contentType == 'channel'`
-   (mpv annonce parfois une durée bidon).
-3. Liseré de focus sur les lignes de chaînes (aujourd'hui un simple `focusColor`).
-4. APK release : keystore + `flutter build apk --split-per-abi`.
-5. Le dépôt n'a **pas encore de remote** : `gh repo create mizu-iptv --public
-   --source=. --push` quand le contenu est validé.
+Liste tenue à jour dans [`TODO.md`](TODO.md). En résumé : compiler macOS,
+masquer la barre de seek sur le direct, liseré de focus sur les chaînes, APK
+release signé, puis publication (remote privé d'abord).
+
+**webOS (LG)** : mis de côté, analyse et plan de reprise dans `TODO.md`
+(section « webOS »). Ne pas relancer ce chantier sans avoir vérifié au préalable
+que le panneau sert du **HLS** — le MPEG-TS n'est pas lisible par `<video>` sur
+webOS.
