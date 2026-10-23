@@ -83,7 +83,10 @@ class _PlayerPageState extends State<PlayerPage> {
     _subs.add(_player.stream.duration.listen((d) {
       setState(() {
         _duration = d;
-        _seekable = d > const Duration(seconds: 1);
+        // Un flux direct n'a pas de durée fiable : mpv annonce parfois
+        // quelques secondes, ce qui afficherait une fausse barre de progression.
+        _seekable = widget.contentType != 'channel' &&
+            d > const Duration(seconds: 5);
       });
       final pending = _pendingSeek;
       if (pending != null && d > const Duration(seconds: 1)) {
@@ -94,6 +97,10 @@ class _PlayerPageState extends State<PlayerPage> {
     _subs.add(_player.stream.playing.listen((p) => setState(() => _playing = p)));
     _subs.add(_player.stream.volume.listen((v) => setState(() => _volume = v)));
     _subs.add(_player.stream.error.listen((e) => setState(() => _error = e)));
+    _subs.add(_player.stream.width.listen(
+        (w) => debugPrint('player: video width=$w')));
+    _subs.add(_player.stream.height.listen(
+        (h) => debugPrint('player: video height=$h')));
     _subs.add(_player.stream.tracks.listen((t) {
       debugPrint('player: pistes audio=${t.audio.length} '
           'subs=${t.subtitle.length} '
