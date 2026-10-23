@@ -13,9 +13,11 @@ import '../state/app_state.dart';
 /// applicatif sur mobile). Changer l'URL ou la clé du backend demande un
 /// redémarrage : `Supabase.initialize` ne se refait pas à chaud.
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, required this.state});
+  const SettingsPage({super.key, required this.state, this.firstRun = false});
 
-  final AppState state;
+  /// `null` au premier lancement (backend pas encore configuré).
+  final AppState? state;
+  final bool firstRun;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -107,7 +109,7 @@ class _SettingsPageState extends State<SettingsPage> {
         publishableKey: _key.text.trim(),
         tmdbApiKey: _tmdb.text.trim(),
       );
-      widget.state.metadata.reloadKey();
+      widget.state?.metadata.reloadKey();
       if (!mounted) return;
       if (restartRequired) {
         await _askRestart();
@@ -170,25 +172,52 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
     if (ok != true) return;
-    await widget.state.signOut();
+    await widget.state?.signOut();
     if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final user = widget.state.session?.user;
+    final user = widget.state?.session?.user;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Préférences')),
+      appBar: AppBar(
+        title: Text(widget.firstRun ? 'Configuration' : 'Préférences'),
+        automaticallyImplyLeading: !widget.firstRun,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          if (widget.firstRun) ...[
+            Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: Image.asset('assets/logo.png', width: 80, height: 80),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Bienvenue sur Mizu IPTV',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Renseigne l\'URL de ton instance Supabase et sa clé publishable. '
+              'Elles sont enregistrées localement (~/.config/mizu/config.json) '
+              'et ne sont jamais compilées dans l\'application.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+            const SizedBox(height: 24),
+          ],
           Text('Serveur', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            'Par défaut, l\'instance de Zen IPTV. Renseigne ta propre instance '
-            'Supabase si tu l\'héberges toi-même.',
+            'Instance Supabase à utiliser : celle de Zen IPTV, ou la tienne '
+            '(voir re/supabase/). Rien n\'est compilé dans l\'application.',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.outline),
           ),
@@ -289,9 +318,9 @@ class _SettingsPageState extends State<SettingsPage> {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.person_outline),
               title: Text(user.email ?? 'Compte connecté'),
-              subtitle: Text(MizuConfig.isCustomBackend
-                  ? MizuConfig.backendUrl
-                  : 'Instance Zen IPTV'),
+              subtitle: Text(MizuConfig.backendUrl.isEmpty
+                  ? 'Backend non configuré'
+                  : MizuConfig.backendUrl),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -305,7 +334,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
           const SizedBox(height: 24),
           Text(
-            'Configuration : ~/.config/mizu/config.json',
+            'Backend : ${MizuConfig.backendUrl.isEmpty ? "non configuré" : MizuConfig.backendUrl}'
+            '${MizuConfig.source.isEmpty ? "" : " (${MizuConfig.source})"}',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.outline),
           ),

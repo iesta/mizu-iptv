@@ -15,8 +15,8 @@
 
 ## Avant publication du dépôt
 
-- [ ] Trancher le sort de la **clé publishable** par défaut (la garder avec une
-      note, ou demander la clé au premier lancement).
+- [x] ~~Clé publishable par défaut~~ → retirée du code : écran de configuration
+      au premier lancement, `.env` ou variables d'environnement.
 - [ ] Créer le remote (`gh repo create`, **privé d'abord**), puis passer public.
 - [ ] Refaire les captures d'écran sur un **compte de démo** : celles existantes
       exposent les profils, sources et favoris réels.

@@ -30,3 +30,8 @@ app/ios/Flutter/ephemeral/
 .idea/
 .vscode/
 *.log
+
+# Configuration locale (clés Supabase/TMDB)
+.env
+.env.*
+!.env.example

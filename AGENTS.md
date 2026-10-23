@@ -84,8 +84,11 @@ tools/make_icons.py            logo 水 → assets Linux/Android/macOS
 ## Conventions
 
 - UI et commentaires **en français**. Code ASCII (sauf `水` dans le logo/README).
-- Aucun secret en dur. La clé publishable par défaut est surchargeable via
-  `~/.config/mizu/config.json`, `MIZU_BACKEND_URL` / `MIZU_PUBLISHABLE_KEY`.
+- **Aucune clé dans le code.** La config vient, par priorité, de
+  l'environnement (`MIZU_BACKEND_URL`, `MIZU_PUBLISHABLE_KEY`, `MIZU_TMDB_KEY`),
+  de `~/.config/mizu/config.json` (écrit par l'écran de configuration) ou d'un
+  `.env`. Sans config, l'app ouvre l'écran « Configuration » et n'initialise
+  pas Supabase.
 - Avant de committer : `flutter analyze` sans erreur + build de la plateforme
   touchée. Messages de commit en français, impératif, une ligne de titre.
 - Variables utiles pour les tests manuels :

@@ -75,18 +75,28 @@ Télécommande / manette :
 
 ## Configuration
 
-`~/.config/mizu/config.json` (optionnel) :
+**Aucune clé n'est compilée dans l'application.** Au premier lancement, Mizu
+s'ouvre sur un écran de configuration (logo 水) qui demande l'URL Supabase et la
+clé publishable ; elles sont enregistrées dans `~/.config/mizu/config.json`
+(chmod 600).
 
-```json
-{
-  "backend_url": "https://api.zeniptv.app",
-  "publishable_key": "sb_publishable_...",
-  "tmdb_api_key": "..."
-}
+Trois autres façons, par ordre de priorité :
+
+```bash
+# 1. variables d'environnement
+export MIZU_BACKEND_URL=https://mon-projet.supabase.co
+export MIZU_PUBLISHABLE_KEY=sb_publishable_...
+export MIZU_TMDB_KEY=...            # optionnel
+
+# 2. fichier .env (répertoire courant, ~/.config/mizu/, ou à côté de l'exécutable)
+cp .env.example .env && $EDITOR .env
+
+# 3. config.json (écrit par l'écran de préférences)
 ```
 
-Variables d'environnement équivalentes : `MIZU_BACKEND_URL`,
-`MIZU_PUBLISHABLE_KEY`, `MIZU_TMDB_KEY`.
+L'écran **Préférences** (roue dentée) permet de tout modifier après coup, de
+tester la connexion GoTrue, et de se déconnecter. Changer l'URL ou la clé
+demande un redémarrage.
 
 `backend_url` / `publishable_key` servent à pointer vers **ta propre instance**
 (voir [`re/supabase/`](re/supabase/)). `tmdb_api_key` (gratuite) améliore les

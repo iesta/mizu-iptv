@@ -3,59 +3,149 @@ import 'dart:io';
 
 import 'platform/app_dirs.dart';
 
-/// Configuration du backend.
+/// Configuration du backend Supabase.
 ///
-/// Par défaut : l'instance utilisée par l'app Zen d'origine. Peut être
-/// remplacée par ta propre instance Supabase (voir `re/supabase/`) via
-/// `~/.config/mizu/config.json` :
+/// **Aucune clé n'est embarquée dans le code.** L'application se configure :
 ///
-/// ```json
-/// {
-///   "backend_url": "https://mon-projet.supabase.co",
-///   "publishable_key": "sb_publishable_...",
-///   "tmdb_api_key": "..."
-/// }
-/// ```
+/// 1. au premier lancement, via l'écran de configuration (URL + clé
+///    publishable) ;
+/// 2. ou par un fichier `.env` (à côté de l'exécutable, dans le répertoire
+///    courant, ou dans `~/.config/mizu/.env`) ;
+/// 3. ou par les variables d'environnement `MIZU_BACKEND_URL` /
+///    `MIZU_PUBLISHABLE_KEY` ;
+/// 4. ou par `~/.config/mizu/config.json` (écrit par l'écran de configuration).
 ///
-/// ou par les variables d'environnement `MIZU_BACKEND_URL` /
-/// `MIZU_PUBLISHABLE_KEY`.
+/// Ordre de priorité : environnement > config.json > .env.
 class MizuConfig {
-  static const String defaultBackendUrl = 'https://api.zeniptv.app';
-  static const String defaultPublishableKey =
-      'sb_publishable_FHN4ODlO5E4bt0ezliSoqQ_3CgYEyQs';
-
-  static String backendUrl = defaultBackendUrl;
-  static String publishableKey = defaultPublishableKey;
+  static String backendUrl = '';
+  static String publishableKey = '';
   static String? tmdbApiKey;
 
-  /// Vrai si l'utilisateur a explicitement configuré un backend.
-  static bool get isCustomBackend =>
-      backendUrl != defaultBackendUrl || publishableKey != defaultPublishableKey;
+  /// D'où vient la configuration (`env`, `config`, `env-file`, vide si aucune).
+  static String source = '';
+
+  /// Vrai si un backend utilisable est configuré.
+  static bool get isConfigured =>
+      backendUrl.isNotEmpty && publishableKey.isNotEmpty;
 
   static File get configFile => File('${AppDirs.configDir}/config.json');
 
-  /// Lit la configuration (fichier puis variables d'environnement).
+  /// Fichiers `.env` consultés, dans l'ordre.
+  static List<File> get envFiles {
+    final files = <File>[
+      File('${Directory.current.path}/.env'),
+      File('${AppDirs.configDir}/.env'),
+    ];
+    try {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      files.add(File('$exeDir/.env'));
+    } catch (_) {
+      // resolvedExecutable indisponible : on ignore.
+    }
+    return files;
+  }
+
+  /// Lit la configuration (env > config.json > .env).
   /// À appeler avant `Supabase.initialize`.
   static void init() {
-    try {
-      if (configFile.existsSync()) {
-        final data = jsonDecode(configFile.readAsStringSync());
-        if (data is Map) {
-          final url = data['backend_url']?.toString().trim();
-          final key = data['publishable_key']?.toString().trim();
-          if (url != null && url.isNotEmpty) backendUrl = url;
-          if (key != null && key.isNotEmpty) publishableKey = key;
-          final tmdb = data['tmdb_api_key']?.toString().trim();
-          if (tmdb != null && tmdb.isNotEmpty) tmdbApiKey = tmdb;
-        }
+    _readEnvFile();
+    _readConfigFile();
+    _readEnvironment();
+
+    if (backendUrl.isNotEmpty) {
+      while (backendUrl.endsWith('/')) {
+        backendUrl = backendUrl.substring(0, backendUrl.length - 1);
       }
-    } catch (_) {
-      // Configuration illisible : on garde les valeurs par défaut.
     }
-    final envUrl = Platform.environment['MIZU_BACKEND_URL']?.trim();
-    final envKey = Platform.environment['MIZU_PUBLISHABLE_KEY']?.trim();
-    if (envUrl != null && envUrl.isNotEmpty) backendUrl = envUrl;
-    if (envKey != null && envKey.isNotEmpty) publishableKey = envKey;
+  }
+
+  static void _readConfigFile() {
+    try {
+      if (!configFile.existsSync()) return;
+      final data = jsonDecode(configFile.readAsStringSync());
+      if (data is! Map) return;
+      final url = data['backend_url']?.toString().trim();
+      final key = data['publishable_key']?.toString().trim();
+      final tmdb = data['tmdb_api_key']?.toString().trim();
+      if (url != null && url.isNotEmpty) {
+        backendUrl = url;
+        source = 'config';
+      }
+      if (key != null && key.isNotEmpty) {
+        publishableKey = key;
+        source = 'config';
+      }
+      if (tmdb != null && tmdb.isNotEmpty) tmdbApiKey = tmdb;
+    } catch (_) {
+      // Fichier illisible : on continue avec les autres sources.
+    }
+  }
+
+  static void _readEnvFile() {
+    for (final file in envFiles) {
+      try {
+        if (!file.existsSync()) continue;
+        final values = _parseDotEnv(file.readAsStringSync());
+        final url = values['MIZU_BACKEND_URL'] ?? values['SUPABASE_URL'];
+        final key = values['MIZU_PUBLISHABLE_KEY'] ??
+            values['SUPABASE_KEY'] ??
+            values['SUPABASE_ANON_KEY'];
+        if (url != null && url.isNotEmpty) {
+          backendUrl = url;
+          source = 'env-file';
+        }
+        if (key != null && key.isNotEmpty) {
+          publishableKey = key;
+          source = 'env-file';
+        }
+        final tmdb = values['MIZU_TMDB_KEY'] ?? values['TMDB_API_KEY'];
+        if (tmdb != null && tmdb.isNotEmpty) tmdbApiKey = tmdb;
+        if (backendUrl.isNotEmpty || publishableKey.isNotEmpty) return;
+      } catch (_) {
+        // .env illisible : on tente le suivant.
+      }
+    }
+  }
+
+  static void _readEnvironment() {
+    final env = Platform.environment;
+    final url = (env['MIZU_BACKEND_URL'] ?? env['SUPABASE_URL'])?.trim();
+    final key = (env['MIZU_PUBLISHABLE_KEY'] ??
+            env['SUPABASE_KEY'] ??
+            env['SUPABASE_ANON_KEY'])
+        ?.trim();
+    final tmdb = (env['MIZU_TMDB_KEY'] ?? env['TMDB_API_KEY'])?.trim();
+    if (url != null && url.isNotEmpty) {
+      backendUrl = url;
+      source = 'env';
+    }
+    if (key != null && key.isNotEmpty) {
+      publishableKey = key;
+      source = 'env';
+    }
+    if (tmdb != null && tmdb.isNotEmpty) tmdbApiKey = tmdb;
+  }
+
+  /// Parseur minimal de `.env` : `CLE=valeur`, `#` en commentaire,
+  /// guillemets optionnels, `export` toléré.
+  static Map<String, String> _parseDotEnv(String content) {
+    final out = <String, String>{};
+    for (final rawLine in const LineSplitter().convert(content)) {
+      var line = rawLine.trim();
+      if (line.isEmpty || line.startsWith('#')) continue;
+      if (line.startsWith('export ')) line = line.substring(7).trim();
+      final eq = line.indexOf('=');
+      if (eq <= 0) continue;
+      final key = line.substring(0, eq).trim();
+      var value = line.substring(eq + 1).trim();
+      if (value.length >= 2 &&
+          ((value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith("'") && value.endsWith("'")))) {
+        value = value.substring(1, value.length - 1);
+      }
+      out[key] = value;
+    }
+    return out;
   }
 
   /// Écrit la configuration. Les champs `null` conservent la valeur existante.
@@ -103,6 +193,7 @@ class MizuConfig {
       // La clé n'est pas un secret critique, mais on limite la lecture.
       await Process.run('chmod', ['600', configFile.path]);
     }
+    source = 'config';
 
     return before != (MizuConfig.backendUrl, MizuConfig.publishableKey);
   }
