@@ -161,7 +161,7 @@ class _ColumnView extends StatelessWidget {
   }
 }
 
-class _FavoriteTile extends StatelessWidget {
+class _FavoriteTile extends StatefulWidget {
   const _FavoriteTile({
     required this.state,
     required this.favorite,
@@ -173,116 +173,202 @@ class _FavoriteTile extends StatelessWidget {
   final bool autofocus;
 
   @override
+  State<_FavoriteTile> createState() => _FavoriteTileState();
+}
+
+class _FavoriteTileState extends State<_FavoriteTile> {
+  bool _removing = false;
+
+  FavoriteItem get f => widget.favorite;
+
+  /// Retrait animé : le coeur grossit, la carte se réduit puis disparaît,
+  /// et l'écriture serveur n'est faite qu'à la fin de l'animation.
+  Future<void> _remove() async {
+    if (_removing) return;
+    setState(() => _removing = true);
+    await Future<void>.delayed(const Duration(milliseconds: 280));
+    if (!mounted) return;
+    await widget.state.toggleFavorite(f.contentId, f.contentType);
+  }
+
+  Future<void> _showContextMenu(Offset globalPosition, bool canOpen,
+      VoidCallback activate) async {
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox) return;
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        if (canOpen)
+          const PopupMenuItem(
+            value: 'open',
+            child: ListTile(
+              dense: true,
+              leading: Icon(Icons.open_in_new),
+              title: Text('Ouvrir'),
+            ),
+          ),
+        const PopupMenuItem(
+          value: 'remove',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.favorite_border),
+            title: Text('Retirer des favoris'),
+          ),
+        ),
+      ],
+    );
+    if (!mounted || selected == null) return;
+    if (selected == 'remove') {
+      await _remove();
+    } else if (selected == 'open') {
+      activate();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final f = favorite;
-    final isChannel = f.contentType == 'channel';
+    final item = f;
+    final isChannel = item.contentType == 'channel';
 
     return ListenableBuilder(
       listenable: CatalogIndex.instance,
       builder: (context, _) {
         final entry = isChannel
             ? null
-            : CatalogIndex.instance.lookup(f.contentType, f.contentId);
+            : CatalogIndex.instance.lookup(item.contentType, item.contentId);
         return FutureBuilder<ContentMeta?>(
           future: isChannel
               ? Future<ContentMeta?>.value(null)
-              : state.metadata.fetch(f.contentType, f.contentId),
+              : widget.state.metadata.fetch(item.contentType, item.contentId),
           builder: (context, snap) {
             final meta = snap.data;
-            final title = meta?.title ?? entry?.name ?? f.contentId;
+            final title = meta?.title ?? entry?.name ?? item.contentId;
             final poster = meta?.poster ?? entry?.poster;
             final canOpen = entry != null && entry.candidates.isNotEmpty;
 
             void activate() {
               if (!canOpen) return;
-              openContent(context, state, kind: f.contentType, entry: entry);
+              openContent(context, widget.state,
+                  kind: item.contentType, entry: entry);
             }
 
-            return TvFocus(
-              autofocus: autofocus,
-              enabled: canOpen,
-              borderRadius: 10,
-              onActivate: activate,
-              child: Card(
-                margin: EdgeInsets.zero,
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  canRequestFocus: false,
-                  onTap: canOpen ? activate : null,
-                  mouseCursor: canOpen
-                      ? SystemMouseCursors.click
-                      : SystemMouseCursors.basic,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: SizedBox(
-                            width: 34,
-                            height: 48,
-                            child: (poster == null || poster.isEmpty)
-                                ? Container(
-                                    color: theme
-                                        .colorScheme.surfaceContainerHighest,
-                                    child: Icon(
-                                      isChannel
-                                          ? Icons.live_tv_outlined
-                                          : Icons.movie_outlined,
-                                      size: 16,
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                  )
-                                : Image.network(
-                                    poster,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => Container(
-                                      color: theme.colorScheme
-                                          .surfaceContainerHighest,
-                                      child: const Icon(Icons.movie_outlined,
-                                          size: 16),
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+            return AnimatedOpacity(
+              opacity: _removing ? 0 : 1,
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeIn,
+              child: AnimatedScale(
+                scale: _removing ? 0.92 : 1,
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeIn,
+                child: GestureDetector(
+                  // Clic droit (Linux/desktop) : menu contextuel.
+                  onSecondaryTapDown: (details) => _showContextMenu(
+                      details.globalPosition, canOpen, activate),
+                  child: TvFocus(
+                    autofocus: widget.autofocus,
+                    enabled: canOpen,
+                    borderRadius: 10,
+                    onActivate: activate,
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        canRequestFocus: false,
+                        onTap: canOpen ? activate : null,
+                        mouseCursor: canOpen
+                            ? SystemMouseCursors.click
+                            : SystemMouseCursors.basic,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Row(
                             children: [
-                              Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium,
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: SizedBox(
+                                  width: 34,
+                                  height: 48,
+                                  child: (poster == null || poster.isEmpty)
+                                      ? Container(
+                                          color: theme.colorScheme
+                                              .surfaceContainerHighest,
+                                          child: Icon(
+                                            isChannel
+                                                ? Icons.live_tv_outlined
+                                                : Icons.movie_outlined,
+                                            size: 16,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                        )
+                                      : Image.network(
+                                          poster,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Container(
+                                            color: theme.colorScheme
+                                                .surfaceContainerHighest,
+                                            child: const Icon(
+                                                Icons.movie_outlined,
+                                                size: 16),
+                                          ),
+                                        ),
+                                ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                [
-                                  if (meta?.year != null) '${meta!.year}',
-                                  if (entry != null &&
-                                      entry.candidates.isNotEmpty)
-                                    entry.candidates.first.sourceName
-                                  else if (!isChannel)
-                                    'hors catalogue',
-                                ].join(' · '),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.outline),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      [
+                                        if (meta?.year != null)
+                                          '${meta!.year}',
+                                        if (entry != null &&
+                                            entry.candidates.isNotEmpty)
+                                          entry.candidates.first.sourceName
+                                        else if (!isChannel)
+                                          'hors catalogue',
+                                      ].join(' · '),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                              color: theme.colorScheme.outline),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Retirer des favoris',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: _removing ? null : _remove,
+                                icon: AnimatedScale(
+                                  scale: _removing ? 1.35 : 1,
+                                  duration: const Duration(milliseconds: 180),
+                                  curve: Curves.easeOutBack,
+                                  child: Icon(
+                                    Icons.favorite,
+                                    size: 16,
+                                    color: _removing
+                                        ? theme.colorScheme.error
+                                        : null,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Retirer des favoris',
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.favorite, size: 16),
-                          onPressed: () =>
-                              state.toggleFavorite(f.contentId, f.contentType),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
