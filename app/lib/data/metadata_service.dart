@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import '../mizu_config.dart';
 import '../platform/app_dirs.dart';
 
 /// Métadonnées TMDB pour les contenus référencés par les favoris et la
@@ -15,10 +16,16 @@ import '../platform/app_dirs.dart';
 class MetadataService {
   MetadataService({String? apiKey}) : _apiKey = apiKey ?? _loadKey();
 
+  /// Relit la clé (après modification dans les préférences).
+  void reloadKey() {
+    _apiKey = _loadKey();
+    _memory.clear();
+  }
+
   static const String _base = 'https://api.themoviedb.org/3';
   static const String imageBase = 'https://image.tmdb.org/t/p';
 
-  final String? _apiKey;
+  String? _apiKey;
   final Map<String, ContentMeta?> _memory = {};
   final http.Client _http = http.Client();
 
@@ -27,17 +34,7 @@ class MetadataService {
   static String? _loadKey() {
     final env = Platform.environment['MIZU_TMDB_KEY'];
     if (env != null && env.trim().isNotEmpty) return env.trim();
-    try {
-      final file = File('${AppDirs.configDir}/config.json');
-      if (!file.existsSync()) return null;
-      final data = jsonDecode(file.readAsStringSync());
-      if (data is Map && data['tmdb_api_key'] is String) {
-        return (data['tmdb_api_key'] as String).trim();
-      }
-    } catch (_) {
-      // Configuration illisible : on reste en mode dégradé.
-    }
-    return null;
+    return MizuConfig.tmdbApiKey;
   }
 
   static File get _cacheFile =>

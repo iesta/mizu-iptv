@@ -8,6 +8,7 @@ import '../state/app_state.dart';
 import 'browse_page.dart';
 import 'continue_tab.dart';
 import 'debug_page.dart';
+import 'settings_page.dart';
 import 'favorites_tab.dart';
 import 'sources_tab.dart';
 import 'source_form_page.dart';
@@ -216,16 +217,18 @@ class _HomePageState extends State<HomePage>
               icon: const Icon(Icons.data_object),
             ),
             IconButton(
-              tooltip: 'Se déconnecter',
-              onPressed: state.signOut,
-              icon: const Icon(Icons.logout),
+              tooltip: 'Préférences',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => SettingsPage(state: state)),
+              ),
+              icon: const Icon(Icons.settings_outlined),
             ),
           ],
           bottom: TabBar(
             controller: _tabs,
             tabs: const [
-              Tab(icon: Icon(Icons.dns_outlined), text: 'Sources'),
               Tab(icon: Icon(Icons.favorite_border), text: 'Favoris'),
+              Tab(icon: Icon(Icons.dns_outlined), text: 'Sources'),
               Tab(icon: Icon(Icons.play_circle_outline), text: 'Reprendre'),
             ],
             indicatorSize: TabBarIndicatorSize.tab,
@@ -246,8 +249,8 @@ class _HomePageState extends State<HomePage>
               child: TabBarView(
                 controller: _tabs,
                 children: [
-                  SourcesTab(state: state),
                   FavoritesTab(state: state),
+                  SourcesTab(state: state),
                   ContinueTab(state: state),
                 ],
               ),

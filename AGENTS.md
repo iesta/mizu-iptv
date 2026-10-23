@@ -72,7 +72,8 @@ app/lib/mizu_config.dart       backend configurable (fichier ou env)
 app/lib/platform/app_dirs.dart chemins XDG (Linux) ou path_provider (mobile/mac)
 app/lib/data/                  Supabase (sync_repository), Xtream, M3U, index TMDB
 app/lib/state/app_state.dart   session, profils, sync, polling
-app/lib/ui/                    login, sources (+formulaire), catalogue, fiche, lecteur
+app/lib/ui/                    login, favoris (3 colonnes), sources (+formulaire),
+                               catalogue, fiche, lecteur, préférences
 app/lib/ui/tv_focus.dart       focus télécommande (liseré) + Échap = retour
 app/lib/theme/omarchy_theme.dart palette Omarchy sinon thème par défaut
 re/                            ingénierie inverse, schéma, scripts d'export
@@ -87,7 +88,7 @@ tools/make_icons.py            logo 水 → assets Linux/Android/macOS
 - Avant de committer : `flutter analyze` sans erreur + build de la plateforme
   touchée. Messages de commit en français, impératif, une ligne de titre.
 - Variables utiles pour les tests manuels :
-  `MIZU_TAB=0|1|2` (onglet), `MIZU_ROUTE=browse:|xt:|xtplay:|detail:|add:`,
+  `MIZU_TAB=0|1|2` (0 Favoris, 1 Sources, 2 Reprendre), `MIZU_ROUTE=browse:|xt:|xtplay:|detail:|add:`,
   `MIZU_AUTOPLAY=1`.
 
 ## Pièges connus (déjà rencontrés)

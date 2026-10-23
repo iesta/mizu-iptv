@@ -62,6 +62,8 @@ Télécommande / manette :
 
 ## Regarder
 
+0. Onglet **Préférences** (roue dentée, aussi accessible avant connexion) :
+   URL du backend, clé publishable, clé TMDB. Se déconnecter s'y trouve aussi.
 1. Onglet **Sources** → clique une carte (ou l'icône grille) pour ouvrir le
    catalogue.
 2. **Live TV** / **Films** / **Séries** : colonne de catégories à gauche,
