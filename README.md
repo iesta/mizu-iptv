@@ -27,9 +27,13 @@ profils, sources, favoris et reprise de lecture.
 ## Lancer
 
 ```bash
-cd app
-flutter run -d linux          # ou : flutter build linux --release
+./tools/build.sh linux        # injecte .env dans le binaire
+cd app && flutter run -d linux
 ```
+
+`tools/build.sh` passe `--dart-define-from-file=../.env` : les valeurs de `.env`
+sont **compilées** dans l'application, donc elle est configurée dès
+l'installation (pratique pour un APK distribué).
 
 Dépendances système (Linux) : `clang cmake ninja pkg-config libgtk-3-dev
 libmpv` (media_kit).
@@ -38,9 +42,12 @@ libmpv` (media_kit).
 
 ```bash
 export ANDROID_HOME=~/dev/tools/android-sdk
-cd app && flutter build apk --debug          # ou --release (signé debug)
-adb install -r build/app/outputs/flutter-apk/app-debug.apk
+./tools/build.sh apk-debug        # ou : apk (release)
+adb install -r app/build/app/outputs/flutter-apk/app-debug.apk
 ```
+
+L'APK embarque la configuration de `.env` : au premier lancement il va
+directement à l'écran de connexion, sans demander l'URL ni la clé.
 
 L'APK est marqué `LEANBACK_LAUNCHER` (il apparaît dans le lanceur TV), avec
 bannière, `touchscreen` non requis et trafic HTTP en clair autorisé (la plupart

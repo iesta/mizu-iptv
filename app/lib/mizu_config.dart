@@ -21,8 +21,19 @@ class MizuConfig {
   static String publishableKey = '';
   static String? tmdbApiKey;
 
-  /// D'où vient la configuration (`env`, `config`, `env-file`, vide si aucune).
+  /// D'où vient la configuration (`env`, `config`, `build`, `env-file`,
+  /// vide si aucune).
   static String source = '';
+
+  // Valeurs injectées à la compilation par
+  // `flutter build … --dart-define-from-file=../.env`.
+  // `String.fromEnvironment` doit être const pour être évalué au build.
+  static const String _buildUrl =
+      String.fromEnvironment('MIZU_BACKEND_URL', defaultValue: '');
+  static const String _buildKey =
+      String.fromEnvironment('MIZU_PUBLISHABLE_KEY', defaultValue: '');
+  static const String _buildTmdb =
+      String.fromEnvironment('MIZU_TMDB_KEY', defaultValue: '');
 
   /// Vrai si un backend utilisable est configuré.
   static bool get isConfigured =>
@@ -45,11 +56,16 @@ class MizuConfig {
     return files;
   }
 
-  /// Lit la configuration (env > config.json > .env).
+  /// Lit la configuration.
+  ///
+  /// Ordre de priorité : variables d'environnement (dev/CI) > config.json
+  /// (choix explicite de l'utilisateur) > valeurs compilées depuis `.env`
+  /// (`--dart-define-from-file`) > fichier `.env` à l'exécution.
   /// À appeler avant `Supabase.initialize`.
   static void init() {
     _readEnvFile();
     _readConfigFile();
+    _readBuildDefines();
     _readEnvironment();
 
     if (backendUrl.isNotEmpty) {
@@ -105,6 +121,18 @@ class MizuConfig {
         // .env illisible : on tente le suivant.
       }
     }
+  }
+
+  static void _readBuildDefines() {
+    if (_buildUrl.trim().isNotEmpty) {
+      backendUrl = _buildUrl.trim();
+      source = 'build';
+    }
+    if (_buildKey.trim().isNotEmpty) {
+      publishableKey = _buildKey.trim();
+      source = 'build';
+    }
+    if (_buildTmdb.trim().isNotEmpty) tmdbApiKey = _buildTmdb.trim();
   }
 
   static void _readEnvironment() {
