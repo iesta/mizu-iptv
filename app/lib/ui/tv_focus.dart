@@ -13,6 +13,7 @@ class TvFocus extends StatefulWidget {
     this.autofocus = false,
     this.borderRadius = 12,
     this.onFocusChange,
+    this.onLongPress,
     this.enabled = true,
   });
 
@@ -21,6 +22,7 @@ class TvFocus extends StatefulWidget {
   final bool autofocus;
   final double borderRadius;
   final ValueChanged<bool>? onFocusChange;
+  final VoidCallback? onLongPress;
   final bool enabled;
 
   @override
@@ -43,7 +45,10 @@ class _TvFocusState extends State<TvFocus> {
       enabled: widget.enabled,
       autofocus: widget.autofocus,
       mouseCursor: SystemMouseCursors.click,
-      onShowFocusHighlight: _setFocus,
+      // onFocusChange plutôt que onShowFocusHighlight : sur Android TV et en
+      // mode tactile, Flutter n'active pas le « highlight » clavier, donc le
+      // liseré ne s'afficherait jamais.
+      onFocusChange: _setFocus,
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
         SingleActivator(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
@@ -59,7 +64,10 @@ class _TvFocusState extends State<TvFocus> {
           },
         ),
       },
-      child: AnimatedContainer(
+      child: GestureDetector(
+        onLongPress: widget.onLongPress,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(widget.borderRadius),
@@ -78,6 +86,7 @@ class _TvFocusState extends State<TvFocus> {
               : null,
         ),
         child: widget.child,
+        ),
       ),
     );
   }

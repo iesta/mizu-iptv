@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'platform/app_dirs.dart';
 import 'state/app_state.dart';
 import 'theme/omarchy_theme.dart';
 import 'ui/home_page.dart';
@@ -12,6 +13,7 @@ import 'mizu_config.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  await AppDirs.init();
   MizuConfig.init();
   await Supabase.initialize(
     url: MizuConfig.backendUrl,

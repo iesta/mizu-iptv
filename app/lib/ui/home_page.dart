@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import '../state/app_state.dart';
@@ -24,12 +25,21 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  int _initialTab = 0;
   bool _devRouteOpened = false;
 
   @override
   void initState() {
     super.initState();
+    _initialTab = int.tryParse(Platform.environment['MIZU_TAB'] ?? '') ?? 0;
+    _tabs = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: _initialTab.clamp(0, 2),
+    );
     if (Platform.environment['MIZU_ROUTE'] == null) return;
     if (widget.state.sources.isEmpty) {
       // Les sources arrivent après le premier rafraîchissement du compte.
@@ -143,19 +153,34 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  void _goTab(int index) {
+    final target = index.clamp(0, 2);
+    if (target != _tabs.index) _tabs.animateTo(target);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = widget.state;
-    final theme = Theme.of(context);
-    final initialTab = int.tryParse(Platform.environment['MIZU_TAB'] ?? '') ?? 0;
 
-    return DefaultTabController(
-      length: 3,
-      initialIndex: initialTab.clamp(0, 2),
+    // Télécommande : CH+ / CH- (PageUp / PageDown) changent d'onglet.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.pageUp): () => _goTab(_tabs.index - 1),
+        const SingleActivator(LogicalKeyboardKey.pageDown): () => _goTab(_tabs.index + 1),
+      },
       child: Scaffold(
         appBar: AppBar(
           title: Row(
             children: [
-              Icon(Icons.live_tv_rounded, color: theme.colorScheme.primary),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: Image.asset('assets/logo.png', width: 26, height: 26),
+              ),
               const SizedBox(width: 10),
               const Text('Mizu IPTV'),
             ],
@@ -196,8 +221,9 @@ class _HomePageState extends State<HomePage> {
               icon: const Icon(Icons.logout),
             ),
           ],
-          bottom: const TabBar(
-            tabs: [
+          bottom: TabBar(
+            controller: _tabs,
+            tabs: const [
               Tab(icon: Icon(Icons.dns_outlined), text: 'Sources'),
               Tab(icon: Icon(Icons.favorite_border), text: 'Favoris'),
               Tab(icon: Icon(Icons.play_circle_outline), text: 'Reprendre'),
@@ -218,6 +244,7 @@ class _HomePageState extends State<HomePage> {
               ),
             Expanded(
               child: TabBarView(
+                controller: _tabs,
                 children: [
                   SourcesTab(state: state),
                   FavoritesTab(state: state),

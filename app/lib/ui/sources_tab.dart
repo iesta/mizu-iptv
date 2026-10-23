@@ -6,6 +6,7 @@ import '../data/xtream_client.dart';
 import '../state/app_state.dart';
 import 'browse_page.dart';
 import 'source_form_page.dart';
+import 'tv_focus.dart';
 import 'xtream_browser_page.dart';
 
 class SourcesTab extends StatelessWidget {
@@ -53,8 +54,11 @@ class SourcesTab extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             itemCount: state.sources.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, i) =>
-                _SourceCard(state: state, source: state.sources[i]),
+            itemBuilder: (context, i) => _SourceCard(
+              state: state,
+              source: state.sources[i],
+              autofocus: i == 0,
+            ),
           ),
         ),
       ],
@@ -63,10 +67,15 @@ class SourcesTab extends StatelessWidget {
 }
 
 class _SourceCard extends StatefulWidget {
-  const _SourceCard({required this.state, required this.source});
+  const _SourceCard({
+    required this.state,
+    required this.source,
+    this.autofocus = false,
+  });
 
   final AppState state;
   final PlaylistSource source;
+  final bool autofocus;
 
   @override
   State<_SourceCard> createState() => _SourceCardState();
@@ -84,6 +93,38 @@ class _SourceCardState extends State<_SourceCard> {
           ? BrowsePlaylistPage(state: widget.state, source: s)
           : XtreamBrowserPage(state: widget.state, source: s),
     ));
+  }
+
+  Future<void> _showActions(BuildContext context) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Modifier'),
+              onTap: () => Navigator.of(context).pop('edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Supprimer'),
+              onTap: () => Navigator.of(context).pop('delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    if (action == 'edit') {
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => SourceFormPage(state: widget.state, source: widget.source),
+      ));
+    } else if (action == 'delete') {
+      await _confirmDelete(context);
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -177,9 +218,14 @@ class _SourceCardState extends State<_SourceCard> {
     final theme = Theme.of(context);
     final s = widget.source;
     final color = s.color != null ? Color(s.color!) : theme.colorScheme.primary;
-    return Card(
+    return TvFocus(
+      autofocus: widget.autofocus,
+      onActivate: _open,
+      onLongPress: () => _showActions(context),
+      child: Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        canRequestFocus: false,
         onTap: _open,
         mouseCursor: SystemMouseCursors.click,
         child: Padding(
@@ -214,14 +260,17 @@ class _SourceCardState extends State<_SourceCard> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  tooltip: s.isM3u
-                      ? 'Parcourir les chaînes'
-                      : 'Parcourir le catalogue',
-                  onPressed: _open,
-                  icon: Icon(s.isM3u ? Icons.playlist_play : Icons.grid_view),
+                ExcludeFocus(
+                  child: IconButton.filledTonal(
+                    tooltip: s.isM3u
+                        ? 'Parcourir les chaînes'
+                        : 'Parcourir le catalogue',
+                    onPressed: _open,
+                    icon: Icon(s.isM3u ? Icons.playlist_play : Icons.grid_view),
+                  ),
                 ),
-                PopupMenuButton<String>(
+                ExcludeFocus(
+                  child: PopupMenuButton<String>(
                   tooltip: 'Gérer la source',
                   icon: const Icon(Icons.more_vert),
                   onSelected: (value) {
@@ -236,34 +285,36 @@ class _SourceCardState extends State<_SourceCard> {
                       _confirmDelete(context);
                     }
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.edit_outlined),
-                        title: Text('Modifier'),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.edit_outlined),
+                          title: Text('Modifier'),
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.delete_outline),
-                        title: Text('Supprimer'),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.delete_outline),
+                          title: Text('Supprimer'),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 8),
-                FilledButton.tonal(
-                  onPressed: _busy ? null : _test,
-                  child: _busy
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Tester'),
+                ExcludeFocus(
+                  child: FilledButton.tonal(
+                    onPressed: _busy ? null : _test,
+                    child: _busy
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Tester'),
+                  ),
                 ),
               ],
             ),
@@ -302,6 +353,7 @@ class _SourceCardState extends State<_SourceCard> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'platform/app_dirs.dart';
+
 /// Configuration du backend.
 ///
 /// Par défaut : l'instance utilisée par l'app Zen d'origine. Peut être
@@ -25,9 +27,7 @@ class MizuConfig {
   static String backendUrl = defaultBackendUrl;
   static String publishableKey = defaultPublishableKey;
 
-  static String get _home => Platform.environment['HOME'] ?? '.';
-
-  static File get configFile => File('$_home/.config/mizu/config.json');
+  static File get configFile => File('${AppDirs.configDir}/config.json');
 
   /// Lit la configuration (fichier puis variables d'environnement).
   /// À appeler avant `Supabase.initialize`.

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -54,6 +55,7 @@ class _PlayerPageState extends State<PlayerPage> {
   final List<StreamSubscription<dynamic>> _subs = [];
   Timer? _ticker;
 
+  double _volume = 100;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   bool _playing = false;
@@ -90,6 +92,7 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     }));
     _subs.add(_player.stream.playing.listen((p) => setState(() => _playing = p)));
+    _subs.add(_player.stream.volume.listen((v) => setState(() => _volume = v)));
     _subs.add(_player.stream.error.listen((e) => setState(() => _error = e)));
     _subs.add(_player.stream.tracks.listen((t) {
       debugPrint('player: pistes audio=${t.audio.length} '
@@ -251,10 +254,47 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
+  /// Télécommande / clavier : Espace = pause, ←/→ = ±10 s, ↑/↓ = volume.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.gameButtonA) {
+      _player.playOrPause();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      _player.seek(_position - const Duration(seconds: 10));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowRight) {
+      _player.seek(_position + const Duration(seconds: 10));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowUp) {
+      _player.setVolume((_volume + 5).clamp(0, 100));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowDown) {
+      _player.setVolume((_volume - 5).clamp(0, 100));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.keyM) {
+      _player.setVolume(_volume > 0 ? 0 : 100);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: Column(
@@ -361,6 +401,7 @@ class _PlayerPageState extends State<PlayerPage> {
           ),
         ],
       ),
+    ),
     );
   }
 }

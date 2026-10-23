@@ -74,8 +74,12 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(Icons.live_tv_rounded,
-                    size: 56, color: theme.colorScheme.primary),
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Image.asset('assets/logo.png', width: 96, height: 96),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Mizu IPTV',

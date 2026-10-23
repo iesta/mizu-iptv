@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import '../platform/app_dirs.dart';
+
 /// Métadonnées TMDB pour les contenus référencés par les favoris et la
 /// progression.
 ///
@@ -26,7 +28,7 @@ class MetadataService {
     final env = Platform.environment['MIZU_TMDB_KEY'];
     if (env != null && env.trim().isNotEmpty) return env.trim();
     try {
-      final file = File('${_home()}/.config/mizu/config.json');
+      final file = File('${AppDirs.configDir}/config.json');
       if (!file.existsSync()) return null;
       final data = jsonDecode(file.readAsStringSync());
       if (data is Map && data['tmdb_api_key'] is String) {
@@ -38,10 +40,8 @@ class MetadataService {
     return null;
   }
 
-  static String _home() => Platform.environment['HOME'] ?? '.';
-
   static File get _cacheFile =>
-      File('${_home()}/.cache/mizu/metadata.json');
+      File('${AppDirs.cacheDir}/metadata.json');
 
   Map<String, dynamic> _cache = {};
   bool _cacheLoaded = false;

@@ -5,6 +5,7 @@ import '../data/metadata_service.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import 'open_content.dart';
+import 'tv_focus.dart';
 
 class ContinueTab extends StatelessWidget {
   const ContinueTab({super.key, required this.state});
@@ -41,17 +42,25 @@ class ContinueTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       itemCount: state.progress.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, i) =>
-          _ProgressTile(state: state, item: state.progress[i]),
+      itemBuilder: (context, i) => _ProgressTile(
+            state: state,
+            item: state.progress[i],
+            autofocus: i == 0,
+          ),
     );
   }
 }
 
 class _ProgressTile extends StatelessWidget {
-  const _ProgressTile({required this.state, required this.item});
+  const _ProgressTile({
+    required this.state,
+    required this.item,
+    this.autofocus = false,
+  });
 
   final AppState state;
   final ProgressItem item;
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
@@ -73,13 +82,21 @@ class _ProgressTile extends StatelessWidget {
             final poster = meta?.poster ?? entry?.poster;
             final canOpen = entry != null && entry.candidates.isNotEmpty;
 
-            return Card(
+            void activate() {
+              if (!canOpen) return;
+              openContent(context, state,
+                  kind: type, entry: entry, initialSeason: p.season);
+            }
+
+            return TvFocus(
+              autofocus: autofocus,
+              enabled: canOpen,
+              onActivate: activate,
+              child: Card(
               clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: canOpen
-                    ? () => openContent(context, state,
-                        kind: type, entry: entry, initialSeason: p.season)
-                    : null,
+                canRequestFocus: false,
+                onTap: canOpen ? activate : null,
                 mouseCursor: canOpen
                     ? SystemMouseCursors.click
                     : SystemMouseCursors.basic,
@@ -157,6 +174,7 @@ class _ProgressTile extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
               ),
             );
           },

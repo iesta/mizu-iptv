@@ -20,8 +20,9 @@ profils, sources, favoris et reprise de lecture.
 | Reprise de lecture (« Reprendre SxEy », saison et position) | ✅ |
 | Lecteur libmpv : pistes audio et sous-titres | ✅ |
 | Thème : suit Omarchy si présent, sinon thème par défaut | ✅ |
-| Navigation télécommande / clavier (D-pad) | 🚧 en cours |
-| Build Android / Android TV / macOS | 🚧 à venir |
+| Navigation télécommande / clavier (D-pad) | ✅ sources, catalogue, fiche, lecteur |
+| Build Android / Android TV | ✅ APK debug + manifest TV (Leanback) |
+| Build macOS | 🚧 à faire sur un Mac (Xcode) |
 
 ## Lancer
 
@@ -32,6 +33,32 @@ flutter run -d linux          # ou : flutter build linux --release
 
 Dépendances système (Linux) : `clang cmake ninja pkg-config libgtk-3-dev
 libmpv` (media_kit).
+
+## Android / Android TV
+
+```bash
+export ANDROID_HOME=~/dev/tools/android-sdk
+cd app && flutter build apk --debug          # ou --release (signé debug)
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+```
+
+L'APK est marqué `LEANBACK_LAUNCHER` (il apparaît dans le lanceur TV), avec
+bannière, `touchscreen` non requis et trafic HTTP en clair autorisé (la plupart
+des panneaux IPTV ne sont pas en TLS).
+
+Télécommande / manette :
+
+| Touche | Action |
+|---|---|
+| D-pad | déplacer le focus (liseré) |
+| OK / Entrée / A | ouvrir, valider |
+| Retour / Échap | revenir |
+| CH+ / CH- (PageUp / PageDown) | changer d'onglet |
+| Appui long sur une source | modifier / supprimer |
+| Espace (lecteur) | lecture / pause |
+| ← / → (lecteur) | ±10 s |
+| ↑ / ↓ (lecteur) | volume |
+| M (lecteur) | muet |
 
 ## Regarder
 

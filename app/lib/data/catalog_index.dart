@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../platform/app_dirs.dart';
 import 'models.dart';
 import 'xtream_client.dart';
 
@@ -31,10 +32,8 @@ class CatalogIndex extends ChangeNotifier {
   IndexEntry? lookup(String kind, String tmdbId) =>
       _entries[_key(kind == 'vod' ? 'vod' : 'serie', tmdbId)];
 
-  static File get _cacheFile {
-    final home = Platform.environment['HOME'] ?? '.';
-    return File('$home/.cache/mizu/catalog_index_v2.json');
-  }
+  static File get _cacheFile =>
+      File('${AppDirs.cacheDir}/catalog_index_v2.json');
 
   /// Charge le cache disque sans toucher au réseau (noms disponibles tout de suite).
   /// Les appels concurrents partagent la même future (pas de lecture partielle).
