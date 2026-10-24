@@ -29,10 +29,25 @@ flutter doctor            # doit être vert pour "Xcode"
 
 cd app
 flutter pub get
-(cd macos && pod install)          # parfois nécessaire avant le premier build
 ../tools/build.sh macos            # injecte ../.env (--dart-define-from-file)
 open build/macos/Build/Products/Debug/Mizu\ IPTV.app
 ```
+
+Notes :
+
+- Le dépôt n'a **pas de `Podfile`** : l'outil Flutter le génère au premier build
+  s'il en a besoin. Ne pas lancer `pod install` avant, ça échouerait.
+- Le dépôt cloné **n'a pas de `.env`** (ignoré par git) : soit `cp .env.example
+  .env` puis renseigner l'URL/clé, soit laisser l'app ouvrir son écran
+  « Configuration » au premier lancement.
+- Sur macOS, `config.json` est écrit dans
+  `~/Library/Application Support/app.mizu.iptv/config.json` (et non
+  `~/.config/mizu/`, réservé à Linux). Les variables `MIZU_*` et le `.env`
+  fonctionnent partout.
+- Signature : build ad-hoc, sans compte développeur. Au premier lancement,
+  macOS peut demander *clic droit → Ouvrir*.
+- Si `flutter build macos` échoue sur `media_kit`, vérifier `pod --version`
+  puis `flutter pub get` ; `media_kit_libs_macos_video` fournit libmpv via pod.
 
 Puis vérifier, dans l'ordre :
 
