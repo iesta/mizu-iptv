@@ -119,7 +119,3 @@ Liste tenue à jour dans [`TODO.md`](TODO.md). En résumé : compiler macOS,
 masquer la barre de seek sur le direct, liseré de focus sur les chaînes, APK
 release signé, puis publication (remote privé d'abord).
 
-**webOS (LG)** : mis de côté, analyse et plan de reprise dans `TODO.md`
-(section « webOS »). Ne pas relancer ce chantier sans avoir vérifié au préalable
-que le panneau sert du **HLS** — le MPEG-TS n'est pas lisible par `<video>` sur
-webOS.
