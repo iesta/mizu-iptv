@@ -15,13 +15,13 @@ observé), [`re/supabase/`](re/supabase/) (schéma + export).
 |---|---|---|
 | Linux | ✅ build + run + lecture | machine de dev d'origine |
 | Android / Android TV | ✅ APK debug, D-pad, lecture | émulateur Android 14 1080p |
-| macOS | ⚠️ **configuré mais jamais compilé** | à faire sur un Mac |
+| macOS | ✅ build + lancement (écran de connexion) ; lecture non testée | Mac ARM, macOS 26, Xcode 26.2 |
 
 Le dossier `app/macos/` existe déjà et est configuré (icônes, entitlements,
 ATS). **Ne pas relancer `flutter create --platforms=macos .`** : cela écraserait
 `macos/Runner/Configs/AppInfo.xcconfig` et les entitlements.
 
-## Première tâche sur un Mac
+## Compiler sur un Mac
 
 ```bash
 # prérequis : macOS 12+, Xcode + Command Line Tools, Flutter stable (>= 3.47), CocoaPods
@@ -30,13 +30,16 @@ flutter doctor            # doit être vert pour "Xcode"
 cd app
 flutter pub get
 ../tools/build.sh macos            # injecte ../.env (--dart-define-from-file)
-open build/macos/Build/Products/Debug/Mizu\ IPTV.app
+open build/macos/Build/Products/Release/Mizu\ IPTV.app
 ```
 
 Notes :
 
-- Le dépôt n'a **pas de `Podfile`** : l'outil Flutter le génère au premier build
-  s'il en a besoin. Ne pas lancer `pod install` avant, ça échouerait.
+- `Podfile`, `Podfile.lock` et l'intégration CocoaPods dans `Runner.xcodeproj`
+  / `Runner.xcworkspace` sont **versionnés** (comme tout projet Flutter macOS) ;
+  seul `Pods/` est ignoré. Après un clone : `flutter pub get` puis
+  `pod install` (dans `app/macos/`) suffisent. Ne pas régénérer ces fichiers à
+  la main.
 - Le dépôt cloné **n'a pas de `.env`** (ignoré par git) : soit `cp .env.example
   .env` puis renseigner l'URL/clé, soit laisser l'app ouvrir son écran
   « Configuration » au premier lancement.

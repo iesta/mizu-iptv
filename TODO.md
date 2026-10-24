@@ -2,8 +2,9 @@
 
 ## En cours / priorité
 
-- [ ] **macOS** : compiler et valider sur un Mac (procédure dans
-      [`AGENTS.md`](AGENTS.md#première-tâche-sur-un-mac)).
+- [x] ~~**macOS** : compiler et valider sur un Mac~~ → build + lancement OK
+      (écran de connexion, `.env` injecté). Reste à valider lecture Live TV et
+      login (procédure dans [`AGENTS.md`](AGENTS.md#compiler-sur-un-mac)).
 - [x] ~~Direct : barre de progression~~ → masquée pour `channel`
       (commit `9aa98be`).
 - [ ] **Focus TV** : liseré de focus sur les lignes de chaînes (aujourd'hui un
