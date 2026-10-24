@@ -25,6 +25,13 @@ class MetadataService {
   static const String _base = 'https://api.themoviedb.org/3';
   static const String imageBase = 'https://image.tmdb.org/t/p';
 
+  /// Durée de conservation d'une fiche en cache.
+  ///
+  /// Les conditions d'utilisation de TMDB encadrent la conservation des
+  /// données mises en cache ; 30 jours reste largement en dessous et évite de
+  /// servir un titre obsolète.
+  static const Duration cacheTtl = Duration(days: 30);
+
   String? _apiKey;
   final Map<String, ContentMeta?> _memory = {};
   final http.Client _http = http.Client();
@@ -76,9 +83,17 @@ class MetadataService {
     await _ensureCache();
     final cached = _cache[key];
     if (cached is Map<String, dynamic>) {
-      final meta = ContentMeta.fromJson(cached);
-      _memory[key] = meta;
-      return meta;
+      final fetchedAt = (cached['fetchedAt'] as num?)?.toInt();
+      final fresh = fetchedAt != null &&
+          DateTime.now().millisecondsSinceEpoch - fetchedAt <
+              cacheTtl.inMilliseconds;
+      if (fresh) {
+        final meta = ContentMeta.fromJson(cached);
+        _memory[key] = meta;
+        return meta;
+      }
+      // Entrée expirée (ou écrite par une ancienne version, sans horodatage).
+      _cache.remove(key);
     }
     try {
       final path = type == 'serie' ? 'tv' : 'movie';
@@ -102,13 +117,34 @@ class MetadataService {
         year: _yearOf(json),
         vote: (json['vote_average'] as num?)?.toDouble(),
       );
-      _cache[key] = meta.toJson();
+      _cache[key] = {
+        ...meta.toJson(),
+        'fetchedAt': DateTime.now().millisecondsSinceEpoch,
+      };
       _memory[key] = meta;
       await _persist();
       return meta;
     } catch (_) {
       _memory[key] = null;
       return null;
+    }
+  }
+
+  /// Nombre de fiches actuellement en cache disque.
+  Future<int> cacheSize() async {
+    await _ensureCache();
+    return _cache.length;
+  }
+
+  /// Vide le cache mémoire et disque (les fiches seront redemandées à TMDB).
+  Future<void> clearCache() async {
+    _memory.clear();
+    _cache = {};
+    _cacheLoaded = true;
+    try {
+      if (_cacheFile.existsSync()) await _cacheFile.delete();
+    } catch (_) {
+      // Rien de bloquant : le cache est recréé au besoin.
     }
   }
 

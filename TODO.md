@@ -23,6 +23,9 @@
 - [ ] Refaire les captures d'écran sur un **compte de démo** : celles existantes
       exposent les profils, sources et favoris réels.
 
+- [x] ~~Cache TMDB sans expiration~~ → TTL 30 jours, purge depuis Préférences,
+      attribution TMDB affichée.
+
 ## Écarté
 
 - **webOS (LG)** — abandonné le 2026-10-24. Décision produit : pas de client web

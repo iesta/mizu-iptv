@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -55,7 +57,11 @@ class _MizuAppState extends State<MizuApp> {
       builder: (context, _) {
         final state = widget.state;
         final Widget home;
-        if (state == null) {
+        // Route de dev : ouvrir directement les préférences (captures, tests).
+        if (const String.fromEnvironment('MIZU_ROUTE') == 'settings' ||
+            Platform.environment['MIZU_ROUTE'] == 'settings') {
+          home = SettingsPage(state: state);
+        } else if (state == null) {
           home = const SettingsPage(state: null, firstRun: true);
         } else {
           home = TvShortcuts(

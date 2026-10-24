@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../data/metadata_service.dart';
 import '../mizu_config.dart';
 import '../state/app_state.dart';
 
@@ -28,11 +29,45 @@ class _SettingsPageState extends State<SettingsPage> {
   late final _key = TextEditingController(text: MizuConfig.publishableKey);
   late final _tmdb = TextEditingController(text: MizuConfig.tmdbApiKey ?? '');
 
+  int? _cacheCount;
+  bool _clearing = false;
   bool _saving = false;
   bool _testing = false;
   String? _testResult;
   bool _testOk = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCacheInfo();
+  }
+
+  MetadataService get _metadata => widget.state?.metadata ?? MetadataService();
+
+  Future<void> _loadCacheInfo() async {
+    try {
+      final count = await _metadata.cacheSize();
+      if (mounted) setState(() => _cacheCount = count);
+    } catch (_) {
+      // Cache illisible : on n'affiche pas de compteur.
+    }
+  }
+
+  Future<void> _clearCache() async {
+    setState(() => _clearing = true);
+    try {
+      await _metadata.clearCache();
+      await _loadCacheInfo();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cache des métadonnées vidé.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _clearing = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -292,6 +327,36 @@ class _SettingsPageState extends State<SettingsPage> {
               labelText: 'Clé API TMDB (optionnel)',
               border: OutlineInputBorder(),
             ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _clearing ? null : _clearCache,
+                icon: _clearing
+                    ? const SizedBox(
+                        height: 14,
+                        width: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.cleaning_services_outlined),
+                label: const Text('Vider le cache'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '${_cacheCount ?? 0} fiche(s) en cache · conservées 30 jours',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.outline),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Ce produit utilise l\'API TMDB mais n\'est ni approuvé ni certifié '
+            'par TMDB.',
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.outline),
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
