@@ -24,11 +24,14 @@ else
   echo "config: aucune (.env absent) — l'app demandera la configuration au lancement"
 fi
 
-cd "$ROOT/app"
 case "$TARGET" in
-  apk)       flutter build apk --release "${DEFINES[@]}" "$@" ;;
-  apk-debug) flutter build apk --debug   "${DEFINES[@]}" "$@" ;;
-  linux)     flutter build linux         "${DEFINES[@]}" "$@" ;;
-  macos)     flutter build macos         "${DEFINES[@]}" "$@" ;;
+  apk)       BUILD=(build apk --release) ;;
+  apk-debug) BUILD=(build apk --debug) ;;
+  linux)     BUILD=(build linux) ;;
+  macos)     BUILD=(build macos) ;;
   *) echo "cible inconnue: $TARGET (apk|apk-debug|linux|macos)" >&2; exit 1 ;;
 esac
+
+cd "$ROOT/app"
+# bash 3.2 (macOS) : "${DEFINES[@]}" sur tableau vide casse set -u.
+flutter "${BUILD[@]}" "${DEFINES[@]+"${DEFINES[@]}"}" "$@"
