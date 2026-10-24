@@ -24,7 +24,26 @@ profils, sources, favoris et reprise de lecture.
 | Build Android / Android TV | ✅ APK debug + manifest TV (Leanback) |
 | Build macOS | 🚧 à faire sur un Mac (Xcode) |
 
-## Lancer
+## Installer (Linux)
+
+```bash
+./tools/install-linux.sh     # build release + installation utilisateur
+```
+
+Installe sans root :
+
+| Quoi | Où |
+|---|---|
+| application | `~/.local/opt/mizu/` |
+| lanceur terminal | `~/.local/bin/mizu` |
+| entrée de menu | `~/.local/share/applications/app.mizu.iptv.desktop` |
+| icônes | `~/.local/share/icons/hicolor/{256,512}/apps/` |
+
+L'apparaît ensuite dans le menu Omarchy (**Super + Maj + Espace** → Apps), et
+dans les autres lanceurs XDG. Désinstallation : `tools/install-linux.sh
+--uninstall`. Réinstallation sans rebuild : `--no-build`.
+
+## Lancer en développement
 
 ```bash
 ./tools/build.sh linux        # injecte .env dans le binaire
