@@ -28,6 +28,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late final _url = TextEditingController(text: MizuConfig.backendUrl);
   late final _key = TextEditingController(text: MizuConfig.publishableKey);
   late final _tmdb = TextEditingController(text: MizuConfig.tmdbApiKey ?? '');
+  late final _ua = TextEditingController(text: MizuConfig.userAgent);
 
   int? _cacheCount;
   bool _clearing = false;
@@ -74,6 +75,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _url.dispose();
     _key.dispose();
     _tmdb.dispose();
+    _ua.dispose();
     super.dispose();
   }
 
@@ -143,6 +145,9 @@ class _SettingsPageState extends State<SettingsPage> {
         backendUrl: _normalize(_url.text),
         publishableKey: _key.text.trim(),
         tmdbApiKey: _tmdb.text.trim(),
+        userAgent: _ua.text.trim().isEmpty
+            ? MizuConfig.defaultUserAgent
+            : _ua.text.trim(),
       );
       widget.state?.metadata.reloadKey();
       if (!mounted) return;
@@ -271,6 +276,18 @@ class _SettingsPageState extends State<SettingsPage> {
             decoration: const InputDecoration(
               labelText: 'Clé publishable',
               hintText: 'sb_publishable_…',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ua,
+            decoration: const InputDecoration(
+              labelText: 'User-Agent des requêtes',
+              hintText: MizuConfig.defaultUserAgent,
+              helperText:
+                  'Certains panneaux filtrent les User-Agent inconnus. '
+                  'Laisser vide pour la valeur par défaut.',
               border: OutlineInputBorder(),
             ),
           ),
