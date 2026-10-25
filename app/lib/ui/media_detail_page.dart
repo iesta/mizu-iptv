@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../data/metadata_service.dart';
 import '../data/models.dart';
 import '../data/xtream_client.dart';
 import '../state/app_state.dart';
@@ -62,6 +63,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
   String? _error;
   bool _loading = true;
   bool _autoPlayed = false;
+  Credits? _credits;
   late XtreamClient _client = widget.client;
   late final List<XtreamClient> _fallbacks = List.of(widget.fallbackClients);
   int _attempt = 0;
@@ -109,7 +111,19 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+    _loadCredits();
     _maybeAutoPlay();
+  }
+
+  /// Distribution via TMDB (photos comprises) ; silencieux si pas de clé TMDB.
+  Future<void> _loadCredits() async {
+    final tmdb = _tmdbId;
+    if (tmdb == null) return;
+    final type = widget.kind == MediaKind.vod ? 'vod' : 'serie';
+    final credits = await widget.state.metadata.fetchCredits(type, tmdb);
+    if (mounted && credits != null && !credits.isEmpty) {
+      setState(() => _credits = credits);
+    }
   }
 
   /// Saison ouverte par défaut : celle de l'épisode à reprendre, sinon celle
@@ -331,7 +345,11 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                     child: Text('Erreur: $_error'),
                   ),
                 )
-              : ListView(
+              : MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: const TextScaler.linear(1.3),
+                  ),
+                  child: ListView(
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -341,8 +359,8 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child: SizedBox(
-                              width: 130,
-                              height: 190,
+                              width: 200,
+                              height: 300,
                               child: _poster == null
                                   ? Container(
                                       color: theme
@@ -387,6 +405,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                                 const SizedBox(height: 12),
                                 if (widget.kind == MediaKind.vod)
                                   FilledButton.icon(
+                                    style: _playButtonStyle(theme),
                                     onPressed: _playMovie,
                                     icon: const Icon(Icons.play_arrow),
                                     label: Text(_resume == null
@@ -396,6 +415,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                                 if (widget.kind == MediaKind.serie &&
                                     target != null)
                                   FilledButton.icon(
+                                    style: _playButtonStyle(theme),
                                     onPressed: _playTarget,
                                     icon: const Icon(Icons.play_arrow),
                                     label: Text(
@@ -439,9 +459,151 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                         child: Text(_plot!, style: theme.textTheme.bodyMedium),
                       ),
                     if (widget.kind == MediaKind.serie) _episodesSection(theme),
+                    _castSection(theme),
                     const SizedBox(height: 24),
                   ],
                 ),
+                ),
+    );
+  }
+
+  /// Bouton de lecture un peu plus gros que le défaut (TV / usage à distance).
+  ButtonStyle _playButtonStyle(ThemeData theme) => FilledButton.styleFrom(
+        minimumSize: const Size(0, 60),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+        iconSize: 34,
+        textStyle: theme.textTheme.titleMedium
+            ?.copyWith(fontWeight: FontWeight.w600),
+      );
+
+  /// Noms séparés par virgule, point-virgule, « & » ou « et » (champ texte
+  /// Xtream), ou déjà sous forme de liste.
+  List<String> _splitNames(dynamic raw) {
+    if (raw == null) return const [];
+    final text = raw is List ? raw.join(', ') : raw.toString();
+    return text
+        .split(RegExp(r'[,;/]| & | et '))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  List<String> get _directors {
+    final fromTmdb = _credits?.directors ?? const <String>[];
+    return fromTmdb.isNotEmpty ? fromTmdb : _splitNames(_info?['director']);
+  }
+
+  List<String> get _composers => _credits?.composers ?? const [];
+
+  List<CastMember> get _cast {
+    final fromTmdb = _credits?.cast ?? const <CastMember>[];
+    if (fromTmdb.isNotEmpty) return fromTmdb;
+    // Repli sans clé TMDB : le champ `cast` de la source, sans photos.
+    return _splitNames(_info?['cast'])
+        .map((name) => CastMember(name: name))
+        .toList();
+  }
+
+  Widget _castSection(ThemeData theme) {
+    final directors = _directors;
+    final composers = _composers;
+    final cast = _cast;
+    if (directors.isEmpty && composers.isEmpty && cast.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text('Distribution', style: theme.textTheme.titleMedium),
+        ),
+        if (directors.isNotEmpty) _crewLine(theme, 'Réalisation', directors),
+        if (composers.isNotEmpty) _crewLine(theme, 'Musique', composers),
+        if (cast.isNotEmpty)
+          SizedBox(
+            height: 210,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: cast.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (context, i) => _personTile(theme, cast[i]),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _crewLine(ThemeData theme, String label, List<String> names) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Text.rich(
+        TextSpan(children: [
+          TextSpan(
+            text: '$label : ',
+            style: TextStyle(color: theme.colorScheme.outline),
+          ),
+          TextSpan(text: names.join(', ')),
+        ]),
+        style: theme.textTheme.bodyMedium,
+      ),
+    );
+  }
+
+  Widget _personTile(ThemeData theme, CastMember person) {
+    final photo = person.photo;
+    return SizedBox(
+      width: 92,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 92,
+              height: 112,
+              child: photo == null
+                  ? _personPlaceholder(theme, person.name)
+                  : Image.network(
+                      photo,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          _personPlaceholder(theme, person.name),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            person.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall,
+          ),
+          if ((person.character ?? '').isNotEmpty)
+            Text(
+              person.character!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _personPlaceholder(ThemeData theme, String name) {
+    final initials = name
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join();
+    return Container(
+      color: theme.colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Text(initials, style: theme.textTheme.titleMedium),
     );
   }
 
@@ -472,7 +634,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
           child: Text('Épisodes', style: theme.textTheme.titleMedium),
         ),
         SizedBox(
-          height: 40,
+          height: 50,
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),

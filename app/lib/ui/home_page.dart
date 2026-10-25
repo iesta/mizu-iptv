@@ -98,7 +98,10 @@ class _HomePageState extends State<HomePage>
       ));
     } else if (parts.first == 'detail' && parts.length > 2) {
       await CatalogIndex.instance.ensureLoaded();
-      final entry = CatalogIndex.instance.lookup('serie', parts[2]);
+      final serieEntry = CatalogIndex.instance.lookup('serie', parts[2]);
+      final entry =
+          serieEntry ?? CatalogIndex.instance.lookup('vod', parts[2]);
+      final kind = serieEntry != null ? MediaKind.serie : MediaKind.vod;
       debugPrint('devroute: entry=${entry?.name} cands=${entry?.candidates.length}');
       if (entry != null && entry.candidates.isNotEmpty) {
         final clients = <XtreamClient>[];
@@ -122,7 +125,7 @@ class _HomePageState extends State<HomePage>
               state: widget.state,
               client: clients.first,
               fallbackClients: clients.skip(1).toList(),
-              kind: MediaKind.serie,
+              kind: kind,
               id: providerId,
               fallbackName: entry.name,
               fallbackPoster: entry.poster,

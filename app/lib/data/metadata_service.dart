@@ -20,6 +20,7 @@ class MetadataService {
   void reloadKey() {
     _apiKey = _loadKey();
     _memory.clear();
+    _creditsMemory.clear();
   }
 
   static const String _base = 'https://api.themoviedb.org/3';
@@ -34,6 +35,7 @@ class MetadataService {
 
   String? _apiKey;
   final Map<String, ContentMeta?> _memory = {};
+  final Map<String, Credits?> _creditsMemory = {};
   final http.Client _http = http.Client();
 
   bool get enabled => (_apiKey ?? '').isNotEmpty;
@@ -156,6 +158,118 @@ class MetadataService {
 
   static String? posterUrl(String? path, {String size = 'w342'}) =>
       path == null ? null : '$imageBase/$size$path';
+
+  static String? profileUrl(String? path, {String size = 'w185'}) =>
+      path == null ? null : '$imageBase/$size$path';
+
+  /// Distribution d'un film ou d'une série : acteurs, réalisation, musique.
+  Future<Credits?> fetchCredits(String type, String id) async {
+    final key = 'credits:$type:$id';
+    if (_creditsMemory.containsKey(key)) return _creditsMemory[key];
+    if (!enabled) {
+      _creditsMemory[key] = null;
+      return null;
+    }
+    await _ensureCache();
+    final cached = _cache[key];
+    if (cached is Map<String, dynamic>) {
+      final credits = Credits.fromJson(cached);
+      _creditsMemory[key] = credits;
+      return credits;
+    }
+    try {
+      final path = type == 'serie' ? 'tv' : 'movie';
+      final res = await _http.get(
+        Uri.parse('$_base/$path/$id/credits?api_key=$_apiKey&language=fr-FR'),
+        headers: {'Accept': 'application/json'},
+      );
+      if (res.statusCode != 200) {
+        _creditsMemory[key] = null;
+        return null;
+      }
+      final json =
+          jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final cast = ((json['cast'] as List?) ?? const [])
+          .whereType<Map>()
+          .take(20)
+          .map((c) => CastMember(
+                name: (c['name'] ?? '').toString(),
+                character: c['character']?.toString(),
+                profilePath: c['profile_path']?.toString(),
+              ))
+          .where((c) => c.name.isNotEmpty)
+          .toList();
+      final crew = ((json['crew'] as List?) ?? const []).whereType<Map>();
+      Iterable<String> jobs(String job) => crew
+          .where((c) => c['job'] == job)
+          .map((c) => (c['name'] ?? '').toString())
+          .where((n) => n.isNotEmpty);
+      final credits = Credits(
+        cast: cast,
+        directors: jobs('Director').toList(),
+        composers: jobs('Original Music Composer').toList(),
+      );
+      _cache[key] = credits.toJson();
+      _creditsMemory[key] = credits;
+      await _persist();
+      return credits;
+    } catch (_) {
+      _creditsMemory[key] = null;
+      return null;
+    }
+  }
+}
+
+class CastMember {
+  CastMember({required this.name, this.character, this.profilePath});
+
+  final String name;
+  final String? character;
+  final String? profilePath;
+
+  String? get photo => MetadataService.profileUrl(profilePath);
+
+  Map<String, dynamic> toJson() =>
+      {'name': name, 'character': character, 'profilePath': profilePath};
+
+  factory CastMember.fromJson(Map<String, dynamic> json) => CastMember(
+        name: json['name']?.toString() ?? '',
+        character: json['character']?.toString(),
+        profilePath: json['profilePath']?.toString(),
+      );
+}
+
+class Credits {
+  Credits({
+    required this.cast,
+    required this.directors,
+    required this.composers,
+  });
+
+  final List<CastMember> cast;
+  final List<String> directors;
+  final List<String> composers;
+
+  bool get isEmpty => cast.isEmpty && directors.isEmpty && composers.isEmpty;
+
+  Map<String, dynamic> toJson() => {
+        'cast': cast.map((c) => c.toJson()).toList(),
+        'directors': directors,
+        'composers': composers,
+      };
+
+  factory Credits.fromJson(Map<String, dynamic> json) => Credits(
+        cast: ((json['cast'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((c) => CastMember.fromJson(c.cast<String, dynamic>()))
+            .toList(),
+        directors: ((json['directors'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+        composers: ((json['composers'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+      );
 }
 
 class ContentMeta {
