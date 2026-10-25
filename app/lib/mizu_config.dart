@@ -21,6 +21,14 @@ class MizuConfig {
   static String publishableKey = '';
   static String? tmdbApiKey;
 
+  /// User-Agent par défaut des requêtes vers les panneaux IPTV.
+  ///
+  /// `package:http` enverrait `Dart/3.x (dart:io)`, que certains panneaux
+  /// bloquent ou filtrent. Surchargeable (config.json / MIZU_USER_AGENT /
+  /// Préférences) pour coller à ce qu'attend le fournisseur.
+  static const String defaultUserAgent = 'MizuIPTV/1.0 (Flutter)';
+  static String userAgent = defaultUserAgent;
+
   /// D'où vient la configuration (`env`, `config`, `build`, `env-file`,
   /// vide si aucune).
   static String source = '';
@@ -116,6 +124,8 @@ class MizuConfig {
         }
         final tmdb = values['MIZU_TMDB_KEY'] ?? values['TMDB_API_KEY'];
         if (tmdb != null && tmdb.isNotEmpty) tmdbApiKey = tmdb;
+        final ua = values['MIZU_USER_AGENT'];
+        if (ua != null && ua.isNotEmpty) userAgent = ua;
         if (backendUrl.isNotEmpty || publishableKey.isNotEmpty) return;
       } catch (_) {
         // .env illisible : on tente le suivant.
@@ -143,6 +153,8 @@ class MizuConfig {
             env['SUPABASE_ANON_KEY'])
         ?.trim();
     final tmdb = (env['MIZU_TMDB_KEY'] ?? env['TMDB_API_KEY'])?.trim();
+    final ua = env['MIZU_USER_AGENT']?.trim();
+    if (ua != null && ua.isNotEmpty) userAgent = ua;
     if (url != null && url.isNotEmpty) {
       backendUrl = url;
       source = 'env';
@@ -182,6 +194,7 @@ class MizuConfig {
     String? backendUrl,
     String? publishableKey,
     String? tmdbApiKey,
+    String? userAgent,
   }) async {
     final before = (MizuConfig.backendUrl, MizuConfig.publishableKey);
 
@@ -202,6 +215,10 @@ class MizuConfig {
     if (publishableKey != null && publishableKey.trim().isNotEmpty) {
       data['publishable_key'] = publishableKey.trim();
       MizuConfig.publishableKey = publishableKey.trim();
+    }
+    if (userAgent != null && userAgent.trim().isNotEmpty) {
+      data['user_agent'] = userAgent.trim();
+      MizuConfig.userAgent = userAgent.trim();
     }
     if (tmdbApiKey != null) {
       if (tmdbApiKey.trim().isEmpty) {

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Mizu IPTV
+Comment=Client IPTV synchronisé (compte Zen)
+Exec=mizu_iptv
+Icon=app.mizu.iptv
+Terminal=false
+Categories=AudioVideo;Video;Player;TV;
+Keywords=iptv;tv;live;m3u;xtream;
+StartupWMClass=app.mizu.iptv

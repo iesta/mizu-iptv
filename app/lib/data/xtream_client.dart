@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../mizu_config.dart';
+
 /// Petit client de l'API Xtream Codes (`player_api.php`).
 ///
 /// C'est le format standard côté fournisseur IPTV : rien de spécifique à Zen.
@@ -41,7 +43,9 @@ class XtreamClient {
   }
 
   Map<String, String> get _headers => {
-        if (userAgent != null && userAgent!.isNotEmpty) 'User-Agent': userAgent!,
+        'User-Agent': (userAgent != null && userAgent!.isNotEmpty)
+            ? userAgent!
+            : MizuConfig.userAgent,
       };
 
   Future<dynamic> _get([Map<String, String> extra = const {}]) async {

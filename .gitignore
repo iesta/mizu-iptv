@@ -35,3 +35,6 @@ app/ios/Flutter/ephemeral/
 .env
 .env.*
 !.env.example
+
+# Paquets générés
+dist/

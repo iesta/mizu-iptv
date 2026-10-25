@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../mizu_config.dart';
 import '../state/app_state.dart';
 
 /// Lecteur basé sur libmpv (media_kit).
@@ -114,7 +115,11 @@ class _PlayerPageState extends State<PlayerPage> {
       });
     }));
 
-    _player.open(Media(widget.url));
+    // Certains panneaux vérifient le User-Agent aussi sur le flux.
+    _player.open(Media(
+      widget.url,
+      httpHeaders: {'User-Agent': MizuConfig.userAgent},
+    ));
 
     if (widget.tracksProgress) {
       _ticker = Timer.periodic(const Duration(seconds: 15), (_) => _saveProgress());

@@ -43,6 +43,35 @@ L'apparaît ensuite dans le menu Omarchy (**Super + Maj + Espace** → Apps), et
 dans les autres lanceurs XDG. Désinstallation : `tools/install-linux.sh
 --uninstall`. Réinstallation sans rebuild : `--no-build`.
 
+## Paquets Linux (AppImage / Flatpak)
+
+**AppImage** — binaire portable, rien à installer :
+
+```bash
+./tools/package-appimage.sh
+./dist/Mizu-IPTV-x86_64.AppImage
+```
+
+Embarque Flutter, libmpv et les assets (~11 Mo). Tourne sur n'importe quelle
+distribution x86_64 avec Wayland ou X11 ; aucune dépendance système à installer.
+
+**Flatpak** — nécessaire pour une intégration « bac à sable » :
+
+```bash
+sudo pacman -S flatpak flatpak-builder        # Arch / Omarchy
+flatpak remote-add --if-not-exists --user flathub \
+  https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user flathub org.freedesktop.Platform//24.08 \
+  org.freedesktop.Sdk//24.08
+
+./tools/package-flatpak.sh            # construit dist/app.mizu.iptv.flatpak
+./tools/package-flatpak.sh --install   # + installation et lancement
+```
+
+Le manifeste (`packaging/flatpak/app.mizu.iptv.yml`) empaquette le bundle
+compilé sur l'hôte (pas de SDK Flutter dans le bac à sable) avec les
+permissions réseau, Wayland/X11 et `dri`.
+
 ## Lancer en développement
 
 ```bash
@@ -134,6 +163,37 @@ local du catalogue.
 Sur Omarchy, l'app lit `~/.local/state/omarchy/current/theme/colors.toml` et en
 dérive ses couleurs (fond, cartes, accent, erreurs). Relecture toutes les 8 s :
 un changement de thème s'applique à chaud. Ailleurs, thème par défaut.
+
+## Héberger sa propre instance Supabase
+
+Le client peut pointer vers **ton** projet Supabase au lieu de l'instance de
+Zen — utile pour ne plus dépendre d'un service tiers, ou pour sauvegarder tes
+données. Tout est détaillé dans [`re/supabase/README.md`](re/supabase/README.md),
+en résumé :
+
+1. **Créer un projet** sur <https://supabase.com> (ou self-host).
+2. **SQL Editor** → exécuter [`re/supabase/schema.sql`](re/supabase/schema.sql)
+   (tables, index, RLS par propriétaire, RPC `favorites_apply_order`, trigger
+   de création des préférences).
+3. **Authentication** → activer *Email* (Apple/Google possible avec tes propres
+   identifiants OAuth).
+4. **Créer ton utilisateur** (écran d'inscription du client, ou *Authentication
+   → Users*).
+5. **Importer tes données** :
+   ```bash
+   cd re/supabase
+   python3 export-data.py --out seed.sql          # mots de passe des sources vidés
+   python3 export-data.py --out seed.sql --with-credentials   # tout, fichier sensible
+   ```
+   puis exécuter `seed.sql` dans le SQL Editor (les UUID de profils et de
+   sources sont conservés, donc favoris et progression restent rattachés).
+6. **Pointer le client** : renseigner l'URL et la clé publishable dans
+   **Préférences**, dans `.env` (avant build), ou via
+   `MIZU_BACKEND_URL` / `MIZU_PUBLISHABLE_KEY`.
+
+Ce que ça ne fait pas : l'app Zen officielle garde son URL et sa clé compilées,
+elle ne peut pas être redirigée. Cette instance sert à **Mizu** (et à
+sauvegarder tes données).
 
 ## Documentation technique
 

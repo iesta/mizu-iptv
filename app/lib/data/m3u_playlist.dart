@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../mizu_config.dart';
+
 class M3uChannel {
   M3uChannel({
     required this.name,
@@ -64,7 +66,9 @@ Future<List<M3uChannel>> loadM3u(String url, {String? userAgent}) async {
   final res = await http.get(
     Uri.parse(url),
     headers: {
-      if (userAgent != null && userAgent.isNotEmpty) 'User-Agent': userAgent,
+      'User-Agent': (userAgent != null && userAgent.isNotEmpty)
+          ? userAgent
+          : MizuConfig.userAgent,
     },
   ).timeout(const Duration(seconds: 45));
   if (res.statusCode != 200) {
