@@ -64,6 +64,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
   bool _loading = true;
   bool _autoPlayed = false;
   Credits? _credits;
+  String? _backdrop;
+  double? _vote;
+  String? _cert;
   late XtreamClient _client = widget.client;
   late final List<XtreamClient> _fallbacks = List.of(widget.fallbackClients);
   int _attempt = 0;
@@ -115,15 +118,21 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     _maybeAutoPlay();
   }
 
-  /// Distribution via TMDB (photos comprises) ; silencieux si pas de clé TMDB.
+  /// Backdrop et distribution via TMDB ; silencieux si pas de clé TMDB.
   Future<void> _loadCredits() async {
     final tmdb = _tmdbId;
     if (tmdb == null) return;
     final type = widget.kind == MediaKind.vod ? 'vod' : 'serie';
+    final meta = await widget.state.metadata.fetch(type, tmdb);
     final credits = await widget.state.metadata.fetchCredits(type, tmdb);
-    if (mounted && credits != null && !credits.isEmpty) {
-      setState(() => _credits = credits);
-    }
+    final cert = await widget.state.metadata.fetchCertification(type, tmdb);
+    if (!mounted) return;
+    setState(() {
+      _backdrop = MetadataService.posterUrl(meta?.backdropPath, size: 'w1280');
+      _vote = meta?.vote;
+      _cert = cert;
+      if (credits != null && !credits.isEmpty) _credits = credits;
+    });
   }
 
   /// Saison ouverte par défaut : celle de l'épisode à reprendre, sinon celle
@@ -148,8 +157,13 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     _season = numbers.first;
   }
 
-  String get _title =>
-      (_info?['name'] ?? _data?['name'] ?? widget.fallbackName).toString();
+  /// Titre affiché, sans le millésime final (« Film (2026) » → « Film ») :
+  /// l'année figure déjà dans les métadonnées.
+  String get _title {
+    final raw =
+        (_info?['name'] ?? _data?['name'] ?? widget.fallbackName).toString();
+    return raw.replaceFirst(RegExp(r'\s*\((?:19|20)\d{2}\)\s*$'), '');
+  }
 
   String? get _plot {
     final raw = (_info?['plot'] ?? _info?['description'] ?? _info?['overview'])
@@ -351,113 +365,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                   ),
                   child: ListView(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: SizedBox(
-                              width: 200,
-                              height: 300,
-                              child: _poster == null
-                                  ? Container(
-                                      color: theme
-                                          .colorScheme.surfaceContainerHighest,
-                                      child: const Icon(Icons.movie_outlined,
-                                          size: 32),
-                                    )
-                                  : Image.network(_poster!,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) => Container(
-                                            color: theme.colorScheme
-                                                .surfaceContainerHighest,
-                                            child: const Icon(
-                                                Icons.movie_outlined,
-                                                size: 32),
-                                          )),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(_title,
-                                    style: theme.textTheme.titleLarge,
-                                    maxLines: 3,
-                                    overflow: TextOverflow.ellipsis),
-                                if (_info?['releaseDate'] != null ||
-                                    _info?['releasedate'] != null)
-                                  Text(
-                                    (_info?['releaseDate'] ??
-                                            _info?['releasedate'])
-                                        .toString(),
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                if (_info?['genre'] != null)
-                                  Text(_info!['genre'].toString(),
-                                      style: theme.textTheme.bodySmall),
-                                if (_info?['rating'] != null)
-                                  Text('★ ${_info!['rating']}',
-                                      style: theme.textTheme.bodySmall),
-                                const SizedBox(height: 12),
-                                if (widget.kind == MediaKind.vod)
-                                  FilledButton.icon(
-                                    style: _playButtonStyle(theme),
-                                    onPressed: _playMovie,
-                                    icon: const Icon(Icons.play_arrow),
-                                    label: Text(_resume == null
-                                        ? 'Lecture'
-                                        : 'Reprendre'),
-                                  ),
-                                if (widget.kind == MediaKind.serie &&
-                                    target != null)
-                                  FilledButton.icon(
-                                    style: _playButtonStyle(theme),
-                                    onPressed: _playTarget,
-                                    icon: const Icon(Icons.play_arrow),
-                                    label: Text(
-                                        'Reprendre S${target.season} E${target.episode}'),
-                                  ),
-                                if (widget.kind == MediaKind.serie &&
-                                    target != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Text(
-                                      target.isNext
-                                          ? 'épisode suivant'
-                                          : target.position > 5
-                                              ? 'à ${_mmss(target.position)}'
-                                              : 'depuis le début',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                              color:
-                                                  theme.colorScheme.outline),
-                                    ),
-                                  ),
-                                if (_tmdbId == null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: Text(
-                                      'Pas d\'identifiant TMDB : favoris et reprise '
-                                      'ne seront pas synchronisés.',
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                          color: theme.colorScheme.outline),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (_plot != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: Text(_plot!, style: theme.textTheme.bodyMedium),
-                      ),
+                    _header(theme, target),
                     if (widget.kind == MediaKind.serie) _episodesSection(theme),
                     _castSection(theme),
                     const SizedBox(height: 24),
@@ -465,6 +373,298 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                 ),
                 ),
     );
+  }
+
+  /// Marge horizontale unique de la fiche (toutes les sections l'utilisent).
+  static const double _pad = 20;
+
+  /// En-tête : backdrop, titre + bouton, puis affiche qui chevauche le
+  /// backdrop juste sous la ligne d'année.
+  Widget _header(ThemeData theme, _Target? target) {
+    return Stack(
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 280,
+          child: _backdropLayer(theme),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(_pad, 12, _pad, 0),
+              child: _titleRow(theme, target),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _pad),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _posterBox(theme),
+                  const SizedBox(width: 20),
+                  Expanded(child: _detailsColumn(theme, target)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _backdropLayer(ThemeData theme) {
+    final backdrop = _backdropUrl;
+    final colors = theme.colorScheme;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (backdrop != null)
+          Image.network(
+            backdrop,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                colors.surface.withValues(alpha: backdrop == null ? 1 : 0.8),
+                colors.surface.withValues(alpha: backdrop == null ? 1 : 0.35),
+                colors.surface,
+              ],
+              stops: const [0, 0.6, 1],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Titre, note, classification, méta à gauche ; bouton de lecture à droite.
+  Widget _titleRow(ThemeData theme, _Target? target) {
+    final colors = theme.colorScheme;
+    final rating = _rating;
+    final meta = [
+      _year,
+      _duration,
+      _info?['genre']?.toString(),
+    ].whereType<String>().where((s) => s.trim().isNotEmpty).toList();
+
+    final play = widget.kind == MediaKind.vod
+        ? FilledButton.icon(
+            style: _playButtonStyle(theme),
+            onPressed: _playMovie,
+            icon: const Icon(Icons.play_arrow),
+            label: Text(_resume == null ? 'Lecture' : 'Reprendre'),
+          )
+        : target != null
+            ? FilledButton.icon(
+                style: _playButtonStyle(theme),
+                onPressed: _playTarget,
+                icon: const Icon(Icons.play_arrow),
+                label: Text('S${target.season} E${target.episode}'),
+              )
+            : null;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _title,
+                style: theme.textTheme.displaySmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (rating != null || _cert != null) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    if (rating != null) ...[
+                      _stars(rating),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${rating.toStringAsFixed(1)} / 5',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(color: colors.onSurfaceVariant),
+                      ),
+                    ],
+                    if (rating != null && _cert != null)
+                      const SizedBox(width: 14),
+                    if (_cert != null) _certBadge(theme),
+                  ],
+                ),
+              ],
+              if (meta.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  meta.join(' · '),
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(color: colors.onSurfaceVariant),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (play != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 24, right: 4),
+            child: play,
+          ),
+      ],
+    );
+  }
+
+  /// Affiche verticale (200×300) avec repli si absente.
+  Widget _posterBox(ThemeData theme) {
+    final fallback = Container(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: const Icon(Icons.movie_outlined, size: 32),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 200,
+        height: 300,
+        child: _poster == null
+            ? fallback
+            : Image.network(
+                _poster!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => fallback,
+              ),
+      ),
+    );
+  }
+
+  /// Description et infos de reprise, à droite de l'affiche.
+  Widget _detailsColumn(ThemeData theme, _Target? target) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_plot != null)
+          Text(_plot!, style: theme.textTheme.bodyMedium),
+        if (widget.kind == MediaKind.serie && target != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              target.isNext
+                  ? 'épisode suivant'
+                  : target.position > 5
+                      ? 'à ${_mmss(target.position)}'
+                      : 'depuis le début',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+          ),
+        if (_tmdbId == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Pas d\'identifiant TMDB : favoris et reprise '
+              'ne seront pas synchronisés.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Classification d'âge TMDB : « 12 », « 16 », « R », « PG-13 »…
+  Widget _certBadge(ThemeData theme) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.colorScheme.outline),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(_cert!, style: theme.textTheme.labelMedium),
+      );
+
+  /// Cinq étoiles jaunes remplies à la fraction de la note (0..5).
+  Widget _stars(double rating) {
+    const amber = Color(0xFFFFC107);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < 5; i++)
+          SizedBox(
+            width: 28,
+            height: 28,
+            child: Stack(
+              children: [
+                Icon(Icons.star_rounded,
+                    size: 28, color: amber.withValues(alpha: 0.22)),
+                ClipRect(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: (rating - i).clamp(0.0, 1.0),
+                    child: const Icon(Icons.star_rounded,
+                        size: 28, color: amber),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Backdrop TMDB si chargé, sinon celui de la source Xtream (URL ou chemin).
+  String? get _backdropUrl {
+    if (_backdrop != null) return _backdrop;
+    final raw = _info?['backdrop_path']?.toString();
+    if (raw == null || raw.isEmpty) return null;
+    return raw.startsWith('http')
+        ? raw
+        : MetadataService.posterUrl(raw, size: 'w1280');
+  }
+
+  /// Note sur 5 : `rating` Xtream (souvent /10) sinon vote TMDB.
+  double? get _rating {
+    var raw = double.tryParse(_info?['rating']?.toString() ?? '');
+    raw ??= _vote;
+    if (raw == null || raw <= 0) return null;
+    return (raw > 5 ? raw / 2 : raw).clamp(0.0, 5.0);
+  }
+
+  String? get _year {
+    final raw = (_info?['releasedate'] ??
+            _info?['releaseDate'] ??
+            _info?['release_date'])
+        ?.toString();
+    if (raw == null) return null;
+    final match = RegExp(r'^(\d{4})').firstMatch(raw);
+    return match?.group(1);
+  }
+
+  /// Durée lisible : « 01:37:31 » (Xtream) → « 1h37 ».
+  String? get _duration {
+    final raw = _info?['duration']?.toString().trim();
+    if (raw != null && raw.isNotEmpty && raw != '00:00:00') {
+      final hms = RegExp(r'^(\d+):(\d{2}):(\d{2})$').firstMatch(raw);
+      if (hms == null) return raw;
+      final h = int.parse(hms.group(1)!);
+      final m = int.parse(hms.group(2)!);
+      return h > 0 ? '${h}h${m.toString().padLeft(2, '0')}' : '$m min';
+    }
+    final secs = int.tryParse(_info?['duration_secs']?.toString() ?? '');
+    if (secs == null || secs <= 0) return null;
+    final h = secs ~/ 3600;
+    final m = (secs % 3600) ~/ 60;
+    return h > 0 ? '${h}h${m.toString().padLeft(2, '0')}' : '$m min';
   }
 
   /// Bouton de lecture un peu plus gros que le défaut (TV / usage à distance).
@@ -515,7 +715,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: const EdgeInsets.fromLTRB(_pad, 8, _pad, 8),
           child: Text('Distribution', style: theme.textTheme.titleMedium),
         ),
         if (directors.isNotEmpty) _crewLine(theme, 'Réalisation', directors),
@@ -525,7 +725,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
             height: 210,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: _pad, vertical: 8),
               itemCount: cast.length,
               separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (context, i) => _personTile(theme, cast[i]),
@@ -537,7 +737,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
 
   Widget _crewLine(ThemeData theme, String label, List<String> names) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      padding: const EdgeInsets.fromLTRB(_pad, 0, _pad, 4),
       child: Text.rich(
         TextSpan(children: [
           TextSpan(
@@ -618,7 +818,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       ..sort();
     if (seasonNumbers.isEmpty) {
       return const Padding(
-        padding: EdgeInsets.all(16),
+        padding: EdgeInsets.all(_pad),
         child: Text('Aucun épisode retourné par la source.'),
       );
     }
@@ -630,14 +830,14 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.fromLTRB(_pad, 0, _pad, 8),
           child: Text('Épisodes', style: theme.textTheme.titleMedium),
         ),
         SizedBox(
           height: 50,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: _pad),
             children: [
               for (final s in seasonNumbers)
                 Padding(
@@ -681,6 +881,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     }
 
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: _pad),
       mouseCursor: SystemMouseCursors.click,
       leading: CircleAvatar(
         radius: 16,

@@ -21,6 +21,7 @@ class MetadataService {
     _apiKey = _loadKey();
     _memory.clear();
     _creditsMemory.clear();
+    _certMemory.clear();
   }
 
   static const String _base = 'https://api.themoviedb.org/3';
@@ -36,6 +37,7 @@ class MetadataService {
   String? _apiKey;
   final Map<String, ContentMeta?> _memory = {};
   final Map<String, Credits?> _creditsMemory = {};
+  final Map<String, String?> _certMemory = {};
   final http.Client _http = http.Client();
 
   bool get enabled => (_apiKey ?? '').isNotEmpty;
@@ -215,6 +217,62 @@ class MetadataService {
       return credits;
     } catch (_) {
       _creditsMemory[key] = null;
+      return null;
+    }
+  }
+  /// Classification d'âge : France d'abord (« 12 », « 16 »), sinon États-Unis
+  /// (« R », « PG-13 », « TV-MA »).
+  Future<String?> fetchCertification(String type, String id) async {
+    final key = 'cert:$type:$id';
+    if (_certMemory.containsKey(key)) return _certMemory[key];
+    if (!enabled) {
+      _certMemory[key] = null;
+      return null;
+    }
+    await _ensureCache();
+    final cached = _cache[key];
+    if (cached is String) {
+      _certMemory[key] = cached;
+      return cached;
+    }
+    try {
+      final path = type == 'serie'
+          ? 'tv/$id/content_ratings'
+          : 'movie/$id/release_dates';
+      final res = await _http.get(
+        Uri.parse('$_base/$path?api_key=$_apiKey'),
+        headers: {'Accept': 'application/json'},
+      );
+      if (res.statusCode != 200) {
+        _certMemory[key] = null;
+        return null;
+      }
+      final json =
+          jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final results = ((json['results'] as List?) ?? const []).whereType<Map>();
+
+      String? pick(String country) {
+        for (final r in results) {
+          if (r['iso_3166_1'] != country) continue;
+          final raw = type == 'serie'
+              ? r['rating']?.toString()
+              : ((r['release_dates'] as List?) ?? const [])
+                  .whereType<Map>()
+                  .map((d) => (d['certification'] ?? '').toString())
+                  .firstWhere((c) => c.isNotEmpty, orElse: () => '');
+          final text = (raw ?? '').trim();
+          if (text.isNotEmpty) return text;
+        }
+        return null;
+      }
+
+      final cert = pick('FR') ?? pick('US');
+      if (cert != null) _cache[key] = cert;
+      _certMemory[key] = cert;
+      await _persist();
+      return cert;
+    } catch (_) {
+      _certMemory[key] = null;
       return null;
     }
   }
