@@ -73,6 +73,30 @@ Points spécifiques macOS :
 - **`media_kit_libs_video`** tire bien `media_kit_libs_macos_video` (vérifié) :
   pas de dépendance supplémentaire à ajouter.
 
+## Trois environnements de test
+
+| Machine | Cible | Ce qu'elle valide |
+|---|---|---|
+| Bureau x86_64 | Linux (Omarchy) | développement principal, AppImage, Flatpak, menu XDG |
+| Mac arm64 | macOS | Xcode/CocoaPods, entitlements, rendu vidéo macOS |
+| Linux arm64 | Linux (Omarchy) | compilation arm64, libmpv système, performances |
+
+**Une seule branche `main`.** Pas de branche par plateforme : >95 % du code est
+partagé, les différences vivent dans `lib/platform/`, `lib/theme/` et les
+dossiers plateforme (`linux/`, `macos/`, `android/`). Des branches séparées
+divergeraient et feraient re-payer chaque correctif trois fois (cf. le fix
+bash 3.2 du Mac, inutile ailleurs mais nécessaire au build macOS).
+
+Règles de travail :
+
+- `git pull --rebase` avant de commencer, commits petits et poussés souvent.
+- Branches **courtes** uniquement pour une fonctionnalité risquée (`feat/...`),
+  fusionnées puis supprimées.
+- Les scripts détectent l'architecture : `tools/_arch.sh` (`x64`/`arm64`).
+- `.env` **par machine**, jamais commité.
+- Un correctif spécifique plateforme doit être vérifié sur les autres cibles
+  avant merge (`flutter analyze` + build de la cible touchée, au minimum).
+
 ## Ce qui ne doit jamais être commité
 
 - `zeniptv.app/`, `zeniptv.zip`, `*.dmg`, `*.ipa` — binaire propriétaire.

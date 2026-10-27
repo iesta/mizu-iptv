@@ -10,11 +10,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_ID="app.mizu.iptv"
+. "$ROOT/tools/_arch.sh"
 NAME="Mizu IPTV"
 DIST="$ROOT/dist"
-BUILD="$ROOT/app/build/linux/x64/release/bundle"
+BUILD="$ROOT/app/build/linux/$FLUTTER_ARCH_DIR/release/bundle"
 TOOLS="${XDG_CACHE_HOME:-$HOME/.cache}/mizu-tools"
-ARCH="x86_64"
+ARCH="$APPIMAGE_ARCH"
 
 echo "== build release =="
 "$ROOT/tools/build.sh" linux

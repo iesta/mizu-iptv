@@ -14,6 +14,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/_arch.sh"
 APP_ID="app.mizu.iptv"
 DEST="$HOME/.local/opt/mizu"
 BIN_LINK="$HOME/.local/bin/mizu"
@@ -44,7 +45,7 @@ if [[ "$NO_BUILD" -eq 0 ]]; then
   "$ROOT/tools/build.sh" linux
 fi
 
-BUNDLE="$ROOT/app/build/linux/x64/release/bundle"
+BUNDLE="$ROOT/app/build/linux/$FLUTTER_ARCH_DIR/release/bundle"
 [[ -x "$BUNDLE/mizu_iptv" ]] || {
   echo "build introuvable : $BUNDLE" >&2
   exit 1

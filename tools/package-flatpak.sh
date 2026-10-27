@@ -13,9 +13,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MANIFEST="$ROOT/packaging/flatpak/app.mizu.iptv.yml"
+. "$ROOT/tools/_arch.sh"
+
 DIST="$ROOT/dist"
-BUILD_DIR="$ROOT/dist/flatpak-build"
+STAGE="$DIST/flatpak"
+BUILD_DIR="$DIST/flatpak-build"
+BUNDLE="$ROOT/app/build/linux/$FLUTTER_ARCH_DIR/release/bundle"
 
 command -v flatpak >/dev/null || { echo "flatpak manquant" >&2; exit 1; }
 command -v flatpak-builder >/dev/null || {
@@ -23,12 +26,23 @@ command -v flatpak-builder >/dev/null || {
   exit 1
 }
 
-echo "== build release =="
+echo "== build release ($FLUTTER_ARCH_DIR) =="
 "$ROOT/tools/build.sh" linux
+
+[[ -d "$BUNDLE" ]] || { echo "bundle introuvable: $BUNDLE" >&2; exit 1; }
+
+echo "== préparation du manifeste =="
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+cp "$ROOT/packaging/flatpak/app.mizu.iptv.desktop" "$STAGE/"
+cp "$ROOT/packaging/flatpak/app.mizu.iptv.png" "$STAGE/"
+sed "s|@BUNDLE@|$BUNDLE|" "$ROOT/packaging/flatpak/app.mizu.iptv.yml" \
+  > "$STAGE/app.mizu.iptv.yml"
 
 echo "== flatpak-builder =="
 mkdir -p "$DIST"
-flatpak-builder --user --force-clean --repo="$DIST/repo" "$BUILD_DIR" "$MANIFEST"
+flatpak-builder --user --force-clean --repo="$DIST/repo" \
+  "$BUILD_DIR" "$STAGE/app.mizu.iptv.yml"
 
 echo "== bundle =="
 OUT="$DIST/app.mizu.iptv.flatpak"

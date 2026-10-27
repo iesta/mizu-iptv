@@ -34,7 +34,7 @@ modules:
     sources:
       # Le bundle compilé est copié ici par tools/package-flatpak.sh
       - type: dir
-        path: ../../app/build/linux/x64/release/bundle
+        path: @BUNDLE@
       - type: file
         path: app.mizu.iptv.desktop
       - type: file
