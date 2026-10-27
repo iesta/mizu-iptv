@@ -14,6 +14,11 @@
 - [ ] Vérifier que les films lancés ici produisent une ligne `vod` lisible par
       l'app Zen (`serie_progress.runtimeType = 'vod'`) — non confirmé.
 
+- [ ] **Releases GitHub** : publier l'AppImage, l'APK release, le zip macOS
+      (base du cask Homebrew et de `tools/package-macos.sh`).
+- [ ] **Notarisation macOS** (compte Apple Developer) si distribution large ;
+      sans elle, cask personnel uniquement + clic droit → Ouvrir.
+
 ## Avant publication du dépôt
 
 - [x] ~~Clé publishable par défaut~~ → retirée du code : écran de configuration

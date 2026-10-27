@@ -93,6 +93,28 @@ Les deux formats universels (AppImage, Flatpak) sont générés par
 `tools/package-appimage.sh` et `tools/package-flatpak.sh`, avec détection
 d'architecture (`tools/_arch.sh`).
 
+### macOS : zip + Homebrew
+
+Sur un Mac :
+
+```bash
+./tools/package-macos.sh
+# → dist/Mizu-IPTV-<version>-macos-arm64.zip + sha256
+```
+
+Publier ce zip dans une **release GitHub**, puis renseigner `@VERSION@` et
+`@SHA256@` dans [`packaging/homebrew/mizu-iptv.rb`](packaging/homebrew/mizu-iptv.rb)
+et le pousser dans un tap personnel :
+
+```bash
+brew tap iesta/mizu
+brew install --cask iesta/mizu/mizu-iptv
+```
+
+Le dépôt officiel **homebrew-cask** exige en plus une app **signée et
+notarisée** (compte Apple Developer) et une URL de téléchargement stable — à
+envisager seulement si tu distribues largement.
+
 ## Lancer en développement
 
 ```bash
