@@ -72,6 +72,27 @@ Le manifeste (`packaging/flatpak/app.mizu.iptv.yml`) empaquette le bundle
 compilé sur l'hôte (pas de SDK Flutter dans le bac à sable) avec les
 permissions réseau, Wayland/X11 et `dri`.
 
+### Distribution Linux : quel format pour quelle distro
+
+| Format | Cibles | État |
+|---|---|---|
+| **AppImage** | toutes (x86_64, aarch64) | ✅ testé x86_64 (~11 Mo, portable) |
+| **Flatpak** | toutes, y compris **Fedora** | ⚙️ manifeste + script prêts, non testés (`flatpak-builder` manquant ici) |
+| **PKGBUILD** (Arch/AUR) | Arch, Omarchy | ⚙️ analyse `makepkg` OK ; build non testé (`flutter` vient de l'AUR) |
+| **RPM** | Fedora / RHEL | 📄 squelette (`packaging/fedora/`), non testé — Fedora recommande Flatpak |
+| **Flake Nix** | NixOS | 📄 squelette (`packaging/nix/`), non testé, empaquette un bundle précompilé |
+
+En pratique :
+
+- **Fedora / Ubuntu / openSUSE** → **Flatpak** (c'est ce que Fedora pousse par défaut).
+- **N'importe quelle distro, sans rien installer** → **AppImage**.
+- **Arch / Omarchy** → PKGBUILD (`makepkg -si`), ou Flatpak.
+- **NixOS** → flake, à condition d'accepter de compiler le bundle à la main avant.
+
+Les deux formats universels (AppImage, Flatpak) sont générés par
+`tools/package-appimage.sh` et `tools/package-flatpak.sh`, avec détection
+d'architecture (`tools/_arch.sh`).
+
 ## Lancer en développement
 
 ```bash

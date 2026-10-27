@@ -1,0 +1,48 @@
+# Maintainer: JM <jm@iesta.com>
+# Paquet Arch/AUR — compilation depuis les sources (Flutter est un makedepend).
+#
+#   cd packaging/arch && makepkg -si
+#
+# Remarque : `flutter` n'est pas dans les dépôts officiels Arch, il vient de
+# l'AUR (AUR/flutter). Alternative sans compilation : le Flatpak ou l'AppImage.
+
+pkgname=mizu-iptv
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Client IPTV synchronisé (compte Zen) — Flutter + libmpv"
+arch=('x86_64' 'aarch64')
+url="https://github.com/iesta/mizu-iptv"
+license=('MIT')
+depends=('gtk3' 'mpv')
+makedepends=('flutter' 'clang' 'cmake' 'ninja' 'pkgconf')
+source=("$pkgname::git+$url#tag=v$pkgver")
+sha256sums=('SKIP')
+
+_flutter_arch() {
+  if [[ $CARCH == 'aarch64' ]]; then echo arm64; else echo x64; fi
+}
+
+build() {
+  cd "$srcdir/$pkgname/app"
+  flutter pub get
+  # Pas de .env : le paquet ne doit embarquer aucune clé. L'app demande sa
+  # configuration au premier lancement.
+  flutter build linux --release
+}
+
+package() {
+  local bundle="$srcdir/$pkgname/app/build/linux/$(_flutter_arch)/release/bundle"
+
+  install -d "$pkgdir/opt/mizu" "$pkgdir/usr/bin"
+  cp -a "$bundle/." "$pkgdir/opt/mizu/"
+  ln -sf /opt/mizu/mizu_iptv "$pkgdir/usr/bin/mizu"
+
+  install -Dm644 "$srcdir/$pkgname/packaging/flatpak/app.mizu.iptv.desktop" \
+    "$pkgdir/usr/share/applications/app.mizu.iptv.desktop"
+
+  install -Dm644 "$srcdir/$pkgname/app/assets/logo_256.png" \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/app.mizu.iptv.png"
+
+  install -Dm644 "$srcdir/$pkgname/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

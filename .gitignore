@@ -38,3 +38,6 @@ app/ios/Flutter/ephemeral/
 
 # Paquets générés
 dist/
+
+# Bundle temporaire pour le flake Nix
+packaging/nix/bundle/
