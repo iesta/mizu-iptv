@@ -24,13 +24,97 @@ profils, sources, favoris et reprise de lecture.
 | Build Android / Android TV | ✅ APK debug + manifest TV (Leanback) |
 | Build macOS | 🚧 à faire sur un Mac (Xcode) |
 
-## Installer (Linux)
+## Installer
+
+Aucune release n'est encore publiée : aujourd'hui on installe depuis les
+sources (les commandes ci-dessous sont complètes, copier-coller). Dès qu'une
+release existera, les lignes « release » seront en un seul `curl`.
+
+### Arch / Omarchy
 
 ```bash
-./tools/install-linux.sh     # build release + installation utilisateur
+sudo pacman -S --needed base-devel clang cmake ninja pkgconf gtk3 mpv
+yay -S --needed flutter                      # flutter n'est pas dans les dépôts
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv
+./tools/install-linux.sh
 ```
 
-Installe sans root :
+Ou en paquet natif (même résultat, intégré à pacman) :
+
+```bash
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv/packaging/arch
+makepkg -si
+```
+
+### Debian / Ubuntu
+
+```bash
+sudo apt update && sudo apt install -y clang cmake ninja-build pkg-config \
+  libgtk-3-dev libmpv-dev curl git unzip xz-utils zip
+git clone --depth 1 -b stable https://github.com/flutter/flutter.git ~/flutter
+export PATH="$HOME/flutter/bin:$PATH"
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv
+./tools/install-linux.sh
+```
+
+### Fedora
+
+```bash
+sudo dnf install -y clang cmake ninja-build pkgconf-pkg-config gtk3-devel \
+  mpv-libs-devel curl git unzip xz zip
+git clone --depth 1 -b stable https://github.com/flutter/flutter.git ~/flutter
+export PATH="$HOME/flutter/bin:$PATH"
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv
+./tools/install-linux.sh
+```
+
+### NixOS
+
+```bash
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv
+./tools/build.sh linux
+cp -a app/build/linux/x64/release/bundle packaging/nix/bundle
+nix build ./packaging/nix#default            # → result/bin/mizu
+```
+
+*(flake non testé ; sur aarch64 remplacer `x64` par `arm64`.)*
+
+### AppImage (toutes distributions, zéro dépendance)
+
+```bash
+# dès qu'une release sera publiée :
+curl -L -o Mizu-IPTV.AppImage \
+  https://github.com/iesta/mizu-iptv/releases/latest/download/Mizu-IPTV-x86_64.AppImage
+chmod +x Mizu-IPTV.AppImage && ./Mizu-IPTV.AppImage
+```
+
+En attendant, on la génère depuis les sources :
+
+```bash
+./tools/package-appimage.sh && ./dist/Mizu-IPTV-x86_64.AppImage
+```
+
+### Flatpak (toutes distributions)
+
+Une fois le `.flatpak` produit (sur ta machine, il faut `flatpak-builder`) :
+
+```bash
+flatpak install --user ./dist/app.mizu.iptv.flatpak && flatpak run app.mizu.iptv
+```
+
+### macOS
+
+```bash
+# dès qu'une release + tap existeront :
+brew tap iesta/mizu && brew install --cask iesta/mizu/mizu-iptv
+```
+
+En attendant, construire sur un Mac (voir [`AGENTS.md`](AGENTS.md)) puis
+`./tools/package-macos.sh` pour produire le zip.
+
+### Ce que fait `tools/install-linux.sh`
+
+Installation **utilisateur, sans root** :
 
 | Quoi | Où |
 |---|---|
@@ -39,23 +123,22 @@ Installe sans root :
 | entrée de menu | `~/.local/share/applications/app.mizu.iptv.desktop` |
 | icônes | `~/.local/share/icons/hicolor/{256,512}/apps/` |
 
-L'apparaît ensuite dans le menu Omarchy (**Super + Maj + Espace** → Apps), et
-dans les autres lanceurs XDG. Désinstallation : `tools/install-linux.sh
---uninstall`. Réinstallation sans rebuild : `--no-build`.
+Elle apparaît ensuite dans le menu Omarchy (**Super + Maj + Espace** → Apps) et
+dans tout lanceur XDG. Désinstallation : `tools/install-linux.sh --uninstall`.
+Réinstallation sans rebuild : `--no-build`.
 
-## Paquets Linux (AppImage / Flatpak)
+## Construire les paquets
 
-**AppImage** — binaire portable, rien à installer :
+Ces scripts servent à produire les artefacts de distribution (ils ne sont pas
+nécessaires pour installer depuis les sources).
+
+**AppImage** — portable, ~11 Mo, Flutter + libmpv embarqués :
 
 ```bash
 ./tools/package-appimage.sh
-./dist/Mizu-IPTV-x86_64.AppImage
 ```
 
-Embarque Flutter, libmpv et les assets (~11 Mo). Tourne sur n'importe quelle
-distribution x86_64 avec Wayland ou X11 ; aucune dépendance système à installer.
-
-**Flatpak** — nécessaire pour une intégration « bac à sable » :
+**Flatpak** — bac à sable, permissions réseau + Wayland/X11 + dri :
 
 ```bash
 sudo pacman -S flatpak flatpak-builder        # Arch / Omarchy
@@ -63,57 +146,21 @@ flatpak remote-add --if-not-exists --user flathub \
   https://flathub.org/repo/flathub.flatpakrepo
 flatpak install --user flathub org.freedesktop.Platform//24.08 \
   org.freedesktop.Sdk//24.08
-
-./tools/package-flatpak.sh            # construit dist/app.mizu.iptv.flatpak
-./tools/package-flatpak.sh --install   # + installation et lancement
+./tools/package-flatpak.sh --install
 ```
 
-Le manifeste (`packaging/flatpak/app.mizu.iptv.yml`) empaquette le bundle
-compilé sur l'hôte (pas de SDK Flutter dans le bac à sable) avec les
-permissions réseau, Wayland/X11 et `dri`.
+**macOS** — sur un Mac : `./tools/package-macos.sh` (zip + sha256 pour le cask).
 
-### Distribution Linux : quel format pour quelle distro
+### État des paquets
 
 | Format | Cibles | État |
 |---|---|---|
-| **AppImage** | toutes (x86_64, aarch64) | ✅ testé x86_64 (~11 Mo, portable) |
-| **Flatpak** | toutes, y compris **Fedora** | ⚙️ manifeste + script prêts, non testés (`flatpak-builder` manquant ici) |
-| **PKGBUILD** (Arch/AUR) | Arch, Omarchy | ⚙️ analyse `makepkg` OK ; build non testé (`flutter` vient de l'AUR) |
-| **RPM** | Fedora / RHEL | 📄 squelette (`packaging/fedora/`), non testé — Fedora recommande Flatpak |
-| **Flake Nix** | NixOS | 📄 squelette (`packaging/nix/`), non testé, empaquette un bundle précompilé |
-
-En pratique :
-
-- **Fedora / Ubuntu / openSUSE** → **Flatpak** (c'est ce que Fedora pousse par défaut).
-- **N'importe quelle distro, sans rien installer** → **AppImage**.
-- **Arch / Omarchy** → PKGBUILD (`makepkg -si`), ou Flatpak.
-- **NixOS** → flake, à condition d'accepter de compiler le bundle à la main avant.
-
-Les deux formats universels (AppImage, Flatpak) sont générés par
-`tools/package-appimage.sh` et `tools/package-flatpak.sh`, avec détection
-d'architecture (`tools/_arch.sh`).
-
-### macOS : zip + Homebrew
-
-Sur un Mac :
-
-```bash
-./tools/package-macos.sh
-# → dist/Mizu-IPTV-<version>-macos-arm64.zip + sha256
-```
-
-Publier ce zip dans une **release GitHub**, puis renseigner `@VERSION@` et
-`@SHA256@` dans [`packaging/homebrew/mizu-iptv.rb`](packaging/homebrew/mizu-iptv.rb)
-et le pousser dans un tap personnel :
-
-```bash
-brew tap iesta/mizu
-brew install --cask iesta/mizu/mizu-iptv
-```
-
-Le dépôt officiel **homebrew-cask** exige en plus une app **signée et
-notarisée** (compte Apple Developer) et une URL de téléchargement stable — à
-envisager seulement si tu distribues largement.
+| **AppImage** | x86_64, aarch64 | ✅ testé x86_64 (~11 Mo) |
+| **Flatpak** | toutes (Fedora, Debian…) | ⚙️ manifeste + script prêts, non testés (`flatpak-builder` absent ici) |
+| **PKGBUILD** (AUR) | Arch, Omarchy | ⚙️ `makepkg --printsrcinfo` OK, build non testé |
+| **RPM** | Fedora / RHEL | 📄 squelette, non testé — Fedora recommande Flatpak |
+| **Flake Nix** | NixOS | 📄 squelette, non testé |
+| **Cask Homebrew** | macOS | 📄 gabarit prêt, nécessite une release GitHub |
 
 ## Lancer en développement
 
