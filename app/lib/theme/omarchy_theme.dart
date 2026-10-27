@@ -130,6 +130,18 @@ class ZenTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: scheme,
+      // Repli pour les noms en chinois/japonais/coréen (Roboto n'a pas ces
+      // glyphes). Les familles système sont utilisées si elles existent.
+      fontFamilyFallback: const [
+        'Noto Sans CJK SC',
+        'Noto Sans CJK JP',
+        'Noto Sans CJK KR',
+        'Noto Sans CJK TC',
+        'Noto Sans CJK HK',
+        'WenQuanYi Micro Hei',
+        'Droid Sans Fallback',
+        'sans-serif',
+      ],
       scaffoldBackgroundColor: background,
       canvasColor: background,
       cardTheme: CardThemeData(

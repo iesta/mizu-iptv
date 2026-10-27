@@ -61,6 +61,15 @@ class _PlayerPageState extends State<PlayerPage> {
   Duration _duration = Duration.zero;
   bool _playing = false;
   bool _seekable = false;
+  bool _fullscreen = false;
+  bool _controlsVisible = true;
+  Timer? _hideTimer;
+  String? _osdText;
+  Timer? _osdTimer;
+  // Accumulation des sauts rapprochés (ex. 3 × +10 s → +30 s).
+  int _pendingJump = 0;
+  Duration? _pendingTarget;
+  Timer? _seekAccumTimer;
   String? _error;
   Duration? _pendingSeek;
 
@@ -95,7 +104,15 @@ class _PlayerPageState extends State<PlayerPage> {
         _player.seek(pending);
       }
     }));
-    _subs.add(_player.stream.playing.listen((p) => setState(() => _playing = p)));
+    _subs.add(_player.stream.playing.listen((p) {
+      setState(() => _playing = p);
+      if (p) {
+        _scheduleHide();
+      } else {
+        _hideTimer?.cancel();
+        setState(() => _controlsVisible = true);
+      }
+    }));
     _subs.add(_player.stream.volume.listen((v) => setState(() => _volume = v)));
     _subs.add(_player.stream.error.listen((e) => setState(() => _error = e)));
     _subs.add(_player.stream.width.listen(
@@ -150,12 +167,93 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _hideTimer?.cancel();
+    _osdTimer?.cancel();
+    _seekAccumTimer?.cancel();
     _saveProgress();
     for (final s in _subs) {
       s.cancel();
     }
     _player.dispose();
     super.dispose();
+  }
+
+  /// Contrôles visibles quand on les a demandés, ou à l'arrêt (pause).
+  bool get _showChrome => _controlsVisible || !_playing;
+
+  void _scheduleHide() {
+    _hideTimer?.cancel();
+    if (!_playing) return;
+    _hideTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _playing) setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _showControls() {
+    setState(() => _controlsVisible = true);
+    _scheduleHide();
+  }
+
+  /// Clic sur l'image : affiche les contrôles, ou les masque s'ils sont déjà là.
+  void _toggleControls() {
+    if (_controlsVisible) {
+      _hideTimer?.cancel();
+      setState(() => _controlsVisible = false);
+    } else {
+      _showControls();
+    }
+  }
+
+  /// OSD éphémère au centre (« +10 s », « -1m »…).
+  void _showOsd(String text) {
+    _osdTimer?.cancel();
+    setState(() => _osdText = text);
+    _osdTimer = Timer(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _osdText = null);
+    });
+  }
+
+  /// Pas de saut : 10 s, 60 s avec Ctrl/⌘, 10 min avec Ctrl/⌘+Maj.
+  int get _seekJump {
+    final ctrl = HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed;
+    if (ctrl && HardwareKeyboard.instance.isShiftPressed) return 600;
+    return ctrl ? 60 : 10;
+  }
+
+  /// Saut cumulatif : les pressions rapprochées s'additionnent (3 × +10 s →
+  /// +30 s) au lieu de repartir d'une position encore périmée. Le cumul est
+  /// oublié après [_seekAccumDelay] sans nouvelle pression.
+  static const Duration _seekAccumDelay = Duration(milliseconds: 800);
+
+  void _seekBy(int seconds) {
+    if (seconds == 0) return;
+    // Changement de sens : on repart de la position courante.
+    if (_pendingJump != 0 && (_pendingJump < 0) != (seconds < 0)) {
+      _pendingJump = 0;
+      _pendingTarget = null;
+    }
+    final target = (_pendingTarget ?? _position) + Duration(seconds: seconds);
+    _pendingTarget = target;
+    _pendingJump += seconds;
+    _player.seek(target);
+    _showOsd(_fmtJump(_pendingJump));
+    _seekAccumTimer?.cancel();
+    _seekAccumTimer = Timer(_seekAccumDelay, () {
+      _pendingJump = 0;
+      _pendingTarget = null;
+    });
+  }
+
+  /// « +30s », « -1m », « +1m10 »…
+  String _fmtJump(int seconds) {
+    final sign = seconds >= 0 ? '+' : '-';
+    final total = seconds.abs();
+    final minutes = total ~/ 60;
+    final rest = total % 60;
+    if (minutes == 0) return '$sign${rest}s';
+    if (rest == 0) return '$sign${minutes}m';
+    return '$sign${minutes}m${rest.toString().padLeft(2, '0')}';
   }
 
   String _fmt(Duration d) {
@@ -266,10 +364,29 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  /// Télécommande / clavier : Espace = pause, ←/→ = ±10 s, ↑/↓ = volume.
+  void _toggleFullscreen() {
+    if (!mounted) return;
+    setState(() => _fullscreen = !_fullscreen);
+    _showControls();
+  }
+
+  /// Télécommande / clavier : Espace = pause, ←/→ = ±10 s, ↑/↓ = volume,
+  /// Ctrl/⌘+F = plein écran, Échap/Retour = revenir à la fiche.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.goBack ||
+        key == LogicalKeyboardKey.browserBack) {
+      Navigator.of(context).maybePop();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.keyF &&
+        (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed)) {
+      _toggleFullscreen();
+      return KeyEventResult.handled;
+    }
     if (key == LogicalKeyboardKey.space ||
         key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.select ||
@@ -278,11 +395,11 @@ class _PlayerPageState extends State<PlayerPage> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
-      _player.seek(_position - const Duration(seconds: 10));
+      _seekBy(-_seekJump);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowRight) {
-      _player.seek(_position + const Duration(seconds: 10));
+      _seekBy(_seekJump);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowUp) {
@@ -303,117 +420,232 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final showChrome = _showChrome;
     return Focus(
       autofocus: true,
       onKeyEvent: _onKey,
       child: Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        backgroundColor: Colors.black,
+        body: Stack(
           children: [
-            Text(widget.title, style: const TextStyle(fontSize: 16)),
-            if (widget.subtitle != null)
-              Text(widget.subtitle!,
-                  style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
-          ],
-        ),
-        actions: [
-          if (widget.contentId != null && widget.contentType != null)
-            ListenableBuilder(
-              listenable: widget.state,
-              builder: (context, _) {
-                final fav = widget.state
-                    .isFavorite(widget.contentId!, widget.contentType!);
-                return IconButton(
-                  tooltip: fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
-                  icon: Icon(fav ? Icons.favorite : Icons.favorite_border),
-                  onPressed: () => widget.state
-                      .toggleFavorite(widget.contentId!, widget.contentType!),
-                );
-              },
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (_error != null)
-            Container(
-              width: double.infinity,
-              color: theme.colorScheme.errorContainer,
-              padding: const EdgeInsets.all(12),
-              child: Text('Lecture impossible : $_error',
-                  style: TextStyle(color: theme.colorScheme.onErrorContainer)),
-            ),
-          Expanded(
-            child: Center(
-              child: Video(
-                controller: _controller,
-                controls: NoVideoControls,
-                fit: BoxFit.contain,
+            Positioned.fill(
+              child: Center(
+                child: Video(
+                  controller: _controller,
+                  controls: NoVideoControls,
+                  fit: _fullscreen ? BoxFit.cover : BoxFit.contain,
+                ),
               ),
             ),
-          ),
-          Container(
-            color: theme.colorScheme.surfaceContainer,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              children: [
-                if (_seekable)
-                  Slider(
-                    min: 0,
-                    max: _duration.inMilliseconds.toDouble().clamp(1, double.infinity),
-                    value: _position.inMilliseconds
-                        .toDouble()
-                        .clamp(0, _duration.inMilliseconds.toDouble()),
-                    onChanged: (v) =>
-                        _player.seek(Duration(milliseconds: v.round())),
-                  )
-                else
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Icon(Icons.podcasts, size: 14),
-                        SizedBox(width: 6),
-                        Text('Flux direct', style: TextStyle(fontSize: 12)),
-                      ],
+            // Clic sur l'image : afficher / masquer les contrôles.
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleControls,
+              ),
+            ),
+            if (_error != null)
+              Container(
+                width: double.infinity,
+                color: theme.colorScheme.errorContainer,
+                padding: const EdgeInsets.all(12),
+                child: Text('Lecture impossible : $_error',
+                    style: TextStyle(color: theme.colorScheme.onErrorContainer)),
+              ),
+            if (showChrome) ..._chrome(theme),
+            // OSD de saut (±10 s / ±1 min), au-dessus du reste.
+            Align(
+              alignment: const Alignment(0, -0.45),
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _osdText == null ? 0 : 1,
+                  duration: const Duration(milliseconds: 140),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 22, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                    child: Text(
+                      _osdText ?? '',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                Row(
-                  children: [
-                    IconButton(
-                      iconSize: 36,
-                      icon: Icon(_playing ? Icons.pause_circle : Icons.play_circle),
-                      onPressed: _player.playOrPause,
-                    ),
-                    if (_seekable)
-                      Text('${_fmt(_position)} / ${_fmt(_duration)}',
-                          style: const TextStyle(fontSize: 12)),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: 'Langue audio (${_tracks.audio.length})',
-                      icon: const Icon(Icons.record_voice_over_outlined),
-                      onPressed: _tracks.audio.isEmpty ? null : _pickAudio,
-                    ),
-                    IconButton(
-                      tooltip: 'Sous-titres (${_tracks.subtitle.length})',
-                      icon: const Icon(Icons.subtitles_outlined),
-                      onPressed: _pickSubtitles,
-                    ),
-                    IconButton(
-                      tooltip: 'Avancer de 90 s',
-                      icon: const Icon(Icons.skip_next),
-                      onPressed: () => _player.seek(_position + const Duration(seconds: 90)),
-                    ),
-                  ],
                 ),
-              ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Superposition des contrôles : barre haute, bouton central, barre basse.
+  List<Widget> _chrome(ThemeData theme) {
+    return [
+      Positioned(
+        top: 0,
+        left: 0,
+        right: 0,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.black87, Colors.transparent],
             ),
           ),
-        ],
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 28),
+          child: Row(
+            children: [
+              TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('retour'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600)),
+                    if (widget.subtitle != null)
+                      Text(widget.subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12)),
+                  ],
+                ),
+              ),
+              if (widget.contentId != null && widget.contentType != null)
+                ListenableBuilder(
+                  listenable: widget.state,
+                  builder: (context, _) {
+                    final fav = widget.state
+                        .isFavorite(widget.contentId!, widget.contentType!);
+                    return IconButton(
+                      color: Colors.white,
+                      tooltip:
+                          fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
+                      icon: Icon(fav ? Icons.favorite : Icons.favorite_border),
+                      onPressed: () => widget.state.toggleFavorite(
+                          widget.contentId!, widget.contentType!),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
       ),
-    ),
-    );
+      Center(
+        child: IconButton.filled(
+          iconSize: 56,
+          padding: const EdgeInsets.all(20),
+          tooltip: _playing ? 'Pause' : 'Lecture',
+          icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+          onPressed: () {
+            _player.playOrPause();
+            _showControls();
+          },
+        ),
+      ),
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Colors.black87, Colors.transparent],
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_seekable)
+                Slider(
+                  min: 0,
+                  max: _duration.inMilliseconds
+                      .toDouble()
+                      .clamp(1, double.infinity),
+                  value: _position.inMilliseconds
+                      .toDouble()
+                      .clamp(0, _duration.inMilliseconds.toDouble()),
+                  onChanged: (v) {
+                    _player.seek(Duration(milliseconds: v.round()));
+                    _showControls();
+                  },
+                )
+              else
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.podcasts, size: 14, color: Colors.white70),
+                      SizedBox(width: 6),
+                      Text('Flux direct',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.white70)),
+                    ],
+                  ),
+                ),
+              Row(
+                children: [
+                  if (_seekable)
+                    Text('${_fmt(_position)} / ${_fmt(_duration)}',
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.white70)),
+                  const Spacer(),
+                  IconButton(
+                    color: Colors.white,
+                    tooltip: 'Langue audio (${_tracks.audio.length})',
+                    icon: const Icon(Icons.record_voice_over_outlined),
+                    onPressed: _tracks.audio.isEmpty ? null : _pickAudio,
+                  ),
+                  IconButton(
+                    color: Colors.white,
+                    tooltip: 'Sous-titres (${_tracks.subtitle.length})',
+                    icon: const Icon(Icons.subtitles_outlined),
+                    onPressed: _pickSubtitles,
+                  ),
+                  IconButton(
+                    color: Colors.white,
+                    tooltip: 'Avancer de 90 s',
+                    icon: const Icon(Icons.skip_next),
+                    onPressed: () {
+                      _seekBy(90);
+                      _showControls();
+                    },
+                  ),
+                  IconButton(
+                    color: Colors.white,
+                    tooltip: 'Plein écran (Ctrl+F)',
+                    icon: Icon(
+                        _fullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
+                    onPressed: _toggleFullscreen,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
   }
 }

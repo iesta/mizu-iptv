@@ -38,6 +38,7 @@ class MetadataService {
   final Map<String, ContentMeta?> _memory = {};
   final Map<String, Credits?> _creditsMemory = {};
   final Map<String, String?> _certMemory = {};
+  final Map<String, List<VideoTrailer>> _videosMemory = {};
   final http.Client _http = http.Client();
 
   bool get enabled => (_apiKey ?? '').isNotEmpty;
@@ -276,6 +277,106 @@ class MetadataService {
       return null;
     }
   }
+
+  /// Bande-annonces / teasers TMDB (YouTube), triés du plus pertinent au moins
+  /// pertinent (officiel, trailer, français, puis anglais).
+  Future<List<VideoTrailer>> fetchVideos(String type, String id) async {
+    final key = 'videos:$type:$id';
+    final cached = _videosMemory[key];
+    if (cached != null) return cached;
+    if (!enabled) {
+      _videosMemory[key] = const [];
+      return const [];
+    }
+    await _ensureCache();
+    final stored = _cache[key];
+    if (stored is List) {
+      final list = stored
+          .whereType<Map>()
+          .map((e) => VideoTrailer.fromJson(e.cast<String, dynamic>()))
+          .toList();
+      _videosMemory[key] = list;
+      return list;
+    }
+    try {
+      final path = type == 'serie' ? 'tv' : 'movie';
+      final res = await _http.get(
+        Uri.parse('$_base/$path/$id/videos?api_key=$_apiKey'),
+        headers: {'Accept': 'application/json'},
+      );
+      if (res.statusCode != 200) {
+        _videosMemory[key] = const [];
+        return const [];
+      }
+      final json =
+          jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final results = ((json['results'] as List?) ?? const []).whereType<Map>();
+      final videos = results
+          .map((v) => VideoTrailer.fromJson(v.cast<String, dynamic>()))
+          .where((v) => v.youtubeKey != null)
+          .toList()
+        ..sort((a, b) => a.rank.compareTo(b.rank));
+      _cache[key] = videos.map((v) => v.toJson()).toList();
+      _videosMemory[key] = videos;
+      await _persist();
+      return videos;
+    } catch (_) {
+      _videosMemory[key] = const [];
+      return const [];
+    }
+  }
+}
+
+/// Bande-annonce ou teaser TMDB (généralement YouTube).
+class VideoTrailer {
+  VideoTrailer({
+    required this.key,
+    required this.site,
+    required this.type,
+    this.language,
+    this.name,
+    this.official = false,
+  });
+
+  final String key;
+  final String site;
+  final String type;
+  final String? language;
+  final String? name;
+  final bool official;
+
+  /// Clé YouTube si le site est YouTube, sinon `null`.
+  String? get youtubeKey =>
+      site.toLowerCase() == 'youtube' && key.isNotEmpty ? key : null;
+
+  String get url => 'https://www.youtube.com/watch?v=$key';
+
+  /// Plus petit = plus pertinent.
+  int get rank {
+    final t = type.toLowerCase();
+    final typeRank = t == 'trailer' ? 0 : (t == 'teaser' ? 1 : 2);
+    final lang = language?.toLowerCase();
+    final langRank = lang == 'fr' ? 0 : (lang == 'en' ? 1 : 2);
+    return typeRank * 10 + langRank + (official ? 0 : 5);
+  }
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'site': site,
+        'type': type,
+        'language': language,
+        'name': name,
+        'official': official,
+      };
+
+  factory VideoTrailer.fromJson(Map<String, dynamic> json) => VideoTrailer(
+        key: (json['key'] ?? '').toString(),
+        site: (json['site'] ?? '').toString(),
+        type: (json['type'] ?? '').toString(),
+        language: json['iso_639_1']?.toString() ?? json['language']?.toString(),
+        name: json['name']?.toString(),
+        official: json['official'] == true,
+      );
 }
 
 class CastMember {

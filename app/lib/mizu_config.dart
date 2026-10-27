@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import 'platform/app_dirs.dart';
 
 /// Configuration du backend Supabase.
@@ -28,6 +30,71 @@ class MizuConfig {
   /// Préférences) pour coller à ce qu'attend le fournisseur.
   static const String defaultUserAgent = 'MizuIPTV/1.0 (Flutter)';
   static String userAgent = defaultUserAgent;
+
+  /// Ordre d'affichage des sections du catalogue Xtream.
+  ///
+  /// Clés : `live` (Live TV), `vod` (Films), `serie` (Séries). Modifiable dans
+  /// Préférences par glisser-déposer. Défaut : Films, Séries, Live TV.
+  static const List<String> defaultSectionOrder = ['vod', 'serie', 'live'];
+
+  static final ValueNotifier<List<String>> _sectionOrderNotifier =
+      ValueNotifier<List<String>>(List<String>.of(defaultSectionOrder));
+
+  /// Ordre courant des sections.
+  static List<String> get sectionOrder => _sectionOrderNotifier.value;
+
+  static set sectionOrder(List<String> value) {
+    final next = List<String>.unmodifiable(value);
+    if (listEquals(next, _sectionOrderNotifier.value)) return;
+    _sectionOrderNotifier.value = next;
+  }
+
+  /// Notifie les vues (Favoris, navigateur de source) quand l'ordre change.
+  static ValueListenable<List<String>> get sectionOrderListenable =>
+      _sectionOrderNotifier;
+
+  /// Taille max des vignettes du catalogue (films/séries), en pixels.
+  static const double defaultThumbSize = 150;
+  static const double minThumbSize = 100;
+  static const double maxThumbSize = 260;
+
+  static final ValueNotifier<double> _thumbSizeNotifier =
+      ValueNotifier<double>(defaultThumbSize);
+
+  static double get thumbSize => _thumbSizeNotifier.value;
+
+  static set thumbSize(double value) {
+    final next = value.clamp(minThumbSize, maxThumbSize).toDouble();
+    if (next == _thumbSizeNotifier.value) return;
+    _thumbSizeNotifier.value = next;
+  }
+
+  static ValueListenable<double> get thumbSizeListenable => _thumbSizeNotifier;
+
+  /// Ordre de tri du catalogue, conservé entre les sessions.
+  static const String defaultCatalogSort = 'recent';
+  static const List<String> catalogSortValues = [
+    'recent',
+    'oldest',
+    'name_asc',
+    'name_desc',
+    'rating_desc',
+    'rating_asc',
+  ];
+
+  static final ValueNotifier<String> _catalogSortNotifier =
+      ValueNotifier<String>(defaultCatalogSort);
+
+  static String get catalogSort => _catalogSortNotifier.value;
+
+  static set catalogSort(String value) {
+    if (!catalogSortValues.contains(value)) return;
+    if (_catalogSortNotifier.value == value) return;
+    _catalogSortNotifier.value = value;
+  }
+
+  static ValueListenable<String> get catalogSortListenable =>
+      _catalogSortNotifier;
 
   /// D'où vient la configuration (`env`, `config`, `build`, `env-file`,
   /// vide si aucune).
@@ -100,9 +167,26 @@ class MizuConfig {
         source = 'config';
       }
       if (tmdb != null && tmdb.isNotEmpty) tmdbApiKey = tmdb;
+      final order = data['section_order'];
+      if (_isValidSectionOrder(order)) {
+        sectionOrder = (order as List).map((e) => e.toString()).toList();
+      }
+      final thumb = data['thumb_size'];
+      if (thumb is num) thumbSize = thumb.toDouble();
+      final sort = data['catalog_sort']?.toString();
+      if (sort != null) catalogSort = sort;
     } catch (_) {
       // Fichier illisible : on continue avec les autres sources.
     }
+  }
+
+  /// Un ordre valide contient exactement les trois sections, sans doublon.
+  static bool _isValidSectionOrder(dynamic raw) {
+    if (raw is! List) return false;
+    final list = raw.map((e) => e.toString()).toList();
+    return list.length == defaultSectionOrder.length &&
+        list.toSet().length == defaultSectionOrder.length &&
+        list.every(defaultSectionOrder.contains);
   }
 
   static void _readEnvFile() {
@@ -195,6 +279,9 @@ class MizuConfig {
     String? publishableKey,
     String? tmdbApiKey,
     String? userAgent,
+    List<String>? sectionOrder,
+    double? thumbSize,
+    String? catalogSort,
   }) async {
     final before = (MizuConfig.backendUrl, MizuConfig.publishableKey);
 
@@ -228,6 +315,19 @@ class MizuConfig {
         data['tmdb_api_key'] = tmdbApiKey.trim();
         MizuConfig.tmdbApiKey = tmdbApiKey.trim();
       }
+    }
+    if (sectionOrder != null && _isValidSectionOrder(sectionOrder)) {
+      final list = sectionOrder.map((e) => e.toString()).toList();
+      data['section_order'] = list;
+      MizuConfig.sectionOrder = list;
+    }
+    if (thumbSize != null) {
+      MizuConfig.thumbSize = thumbSize;
+      data['thumb_size'] = MizuConfig.thumbSize;
+    }
+    if (catalogSort != null && catalogSortValues.contains(catalogSort)) {
+      MizuConfig.catalogSort = catalogSort;
+      data['catalog_sort'] = MizuConfig.catalogSort;
     }
 
     await configFile.parent.create(recursive: true);

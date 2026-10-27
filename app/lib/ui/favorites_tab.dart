@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/catalog_index.dart';
 import '../data/metadata_service.dart';
 import '../data/models.dart';
+import '../mizu_config.dart';
 import '../state/app_state.dart';
 import 'open_content.dart';
 import 'tv_focus.dart';
@@ -15,6 +16,33 @@ class FavoritesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<String>>(
+      valueListenable: MizuConfig.sectionOrderListenable,
+      builder: (context, order, _) => _buildContent(context, order),
+    );
+  }
+
+  /// Colonne de favoris pour une clé de section (`live`/`vod`/`serie`).
+  static _Column _columnFor(
+    String key,
+    List<FavoriteItem> channels,
+    List<FavoriteItem> movies,
+    List<FavoriteItem> series,
+  ) {
+    switch (key) {
+      case 'vod':
+        return _Column(title: 'Films', icon: Icons.movie_outlined, items: movies);
+      case 'serie':
+        return _Column(
+            title: 'Séries',
+            icon: Icons.video_library_outlined,
+            items: series);
+      default:
+        return _Column(title: 'TV', icon: Icons.live_tv_outlined, items: channels);
+    }
+  }
+
+  Widget _buildContent(BuildContext context, List<String> order) {
     final theme = Theme.of(context);
     if (state.favorites.isEmpty) {
       return Center(
@@ -47,13 +75,9 @@ class FavoritesTab extends StatelessWidget {
     final series =
         state.favorites.where((f) => f.contentType == 'serie').toList();
 
+    // Les colonnes suivent l'ordre choisi dans Préférences.
     final columns = [
-      _Column(title: 'TV', icon: Icons.live_tv_outlined, items: channels),
-      _Column(title: 'Films', icon: Icons.movie_outlined, items: movies),
-      _Column(
-          title: 'Séries',
-          icon: Icons.video_library_outlined,
-          items: series),
+      for (final key in order) _columnFor(key, channels, movies, series),
     ];
 
     // Trois colonnes sur un écran large (TV / desktop), sections empilées sinon.
@@ -71,7 +95,11 @@ class FavoritesTab extends StatelessWidget {
               )
             else
               for (final item in column.items)
-                _FavoriteTile(state: state, favorite: item),
+                _FavoriteTile(
+                  key: _favoriteKey(item),
+                  state: state,
+                  favorite: item,
+                ),
             const SizedBox(height: 20),
           ],
         ],
@@ -99,6 +127,10 @@ class _Column {
   final IconData icon;
   final List<FavoriteItem> items;
 }
+
+/// Clé stable par contenu : évite qu'un retrait ne réutilise l'état du voisin
+/// (sinon le favori suivant hérite de l'animation et disparaît).
+Key _favoriteKey(FavoriteItem f) => ValueKey('${f.contentType}:${f.contentId}');
 
 class _ColumnHeader extends StatelessWidget {
   const _ColumnHeader({required this.column});
@@ -150,6 +182,7 @@ class _ColumnView extends StatelessWidget {
                   itemCount: column.items.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 6),
                   itemBuilder: (context, i) => _FavoriteTile(
+                    key: _favoriteKey(column.items[i]),
                     state: state,
                     favorite: column.items[i],
                     autofocus: i == 0,
@@ -163,6 +196,7 @@ class _ColumnView extends StatelessWidget {
 
 class _FavoriteTile extends StatefulWidget {
   const _FavoriteTile({
+    super.key,
     required this.state,
     required this.favorite,
     this.autofocus = false,
@@ -178,15 +212,20 @@ class _FavoriteTile extends StatefulWidget {
 
 class _FavoriteTileState extends State<_FavoriteTile> {
   bool _removing = false;
+  bool _collapsed = false;
 
   FavoriteItem get f => widget.favorite;
 
-  /// Retrait animé : le coeur grossit, la carte se réduit puis disparaît,
-  /// et l'écriture serveur n'est faite qu'à la fin de l'animation.
+  /// Retrait en deux temps : le coeur grossit et la carte s'efface, puis la
+  /// ligne se replie (les suivantes remontent), enfin la suppression est
+  /// écrite côté serveur. L'écriture n'arrive qu'à la fin : pas de saut.
   Future<void> _remove() async {
     if (_removing) return;
     setState(() => _removing = true);
-    await Future<void>.delayed(const Duration(milliseconds: 280));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+    setState(() => _collapsed = true);
+    await Future<void>.delayed(const Duration(milliseconds: 240));
     if (!mounted) return;
     await widget.state.toggleFavorite(f.contentId, f.contentType);
   }
@@ -235,7 +274,7 @@ class _FavoriteTileState extends State<_FavoriteTile> {
     final item = f;
     final isChannel = item.contentType == 'channel';
 
-    return ListenableBuilder(
+    final content = ListenableBuilder(
       listenable: CatalogIndex.instance,
       builder: (context, _) {
         final entry = isChannel
@@ -350,7 +389,12 @@ class _FavoriteTileState extends State<_FavoriteTile> {
                               ),
                               IconButton(
                                 tooltip: 'Retirer des favoris',
-                                visualDensity: VisualDensity.compact,
+                                iconSize: 28,
+                                padding: const EdgeInsets.all(10),
+                                constraints: const BoxConstraints(
+                                  minWidth: 48,
+                                  minHeight: 48,
+                                ),
                                 onPressed: _removing ? null : _remove,
                                 icon: AnimatedScale(
                                   scale: _removing ? 1.35 : 1,
@@ -358,7 +402,7 @@ class _FavoriteTileState extends State<_FavoriteTile> {
                                   curve: Curves.easeOutBack,
                                   child: Icon(
                                     Icons.favorite,
-                                    size: 16,
+                                    size: 26,
                                     color: _removing
                                         ? theme.colorScheme.error
                                         : null,
@@ -377,6 +421,13 @@ class _FavoriteTileState extends State<_FavoriteTile> {
           },
         );
       },
+    );
+    // Replie la ligne après l'effet : les favoris suivants remontent en douceur.
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeInOut,
+      alignment: Alignment.topCenter,
+      child: _collapsed ? const SizedBox(width: double.infinity) : content,
     );
   }
 }

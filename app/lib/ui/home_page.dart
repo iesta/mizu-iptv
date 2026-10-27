@@ -231,8 +231,8 @@ class _HomePageState extends State<HomePage>
             controller: _tabs,
             tabs: const [
               Tab(icon: Icon(Icons.favorite_border), text: 'Favoris'),
-              Tab(icon: Icon(Icons.dns_outlined), text: 'Sources'),
               Tab(icon: Icon(Icons.play_circle_outline), text: 'Reprendre'),
+              Tab(icon: Icon(Icons.dns_outlined), text: 'Sources'),
             ],
             indicatorSize: TabBarIndicatorSize.tab,
           ),
@@ -253,8 +253,8 @@ class _HomePageState extends State<HomePage>
                 controller: _tabs,
                 children: [
                   FavoritesTab(state: state),
-                  SourcesTab(state: state),
                   ContinueTab(state: state),
+                  SourcesTab(state: state),
                 ],
               ),
             ),

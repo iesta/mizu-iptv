@@ -1,10 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:media_kit/media_kit.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/metadata_service.dart';
 import '../data/models.dart';
 import '../data/xtream_client.dart';
+import '../mizu_config.dart';
 import '../state/app_state.dart';
 import 'player_page.dart';
 
@@ -63,7 +69,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
   String? _error;
   bool _loading = true;
   bool _autoPlayed = false;
+  bool _showAllCast = false;
   Credits? _credits;
+  List<VideoTrailer> _trailers = const [];
   String? _backdrop;
   double? _vote;
   String? _cert;
@@ -126,12 +134,14 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     final meta = await widget.state.metadata.fetch(type, tmdb);
     final credits = await widget.state.metadata.fetchCredits(type, tmdb);
     final cert = await widget.state.metadata.fetchCertification(type, tmdb);
+    final videos = await widget.state.metadata.fetchVideos(type, tmdb);
     if (!mounted) return;
     setState(() {
       _backdrop = MetadataService.posterUrl(meta?.backdropPath, size: 'w1280');
       _vote = meta?.vote;
       _cert = cert;
       if (credits != null && !credits.isEmpty) _credits = credits;
+      if (videos.isNotEmpty) _trailers = videos;
     });
   }
 
@@ -185,6 +195,96 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         ?.toString();
     if (raw == null || raw.isEmpty || raw == '0') return null;
     return raw;
+  }
+
+  /// Ouvre la fiche TMDB du film ou de la série dans le navigateur.
+  Future<void> _openTmdb() async {
+    final tmdb = _tmdbId;
+    if (tmdb == null) return;
+    final kind = widget.kind == MediaKind.vod ? 'movie' : 'tv';
+    final uri = Uri.parse('https://www.themoviedb.org/$kind/$tmdb');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Aucun navigateur disponible : on ignore.
+    }
+  }
+
+  /// Trailers TMDB, ou repli sur `youtube_trailer` fourni par le panneau.
+  List<VideoTrailer> get _availableTrailers {
+    if (_trailers.isNotEmpty) return _trailers;
+    final raw = _info?['youtube_trailer']?.toString().trim();
+    if (raw == null || raw.isEmpty) return const [];
+    final key = _youtubeKeyOf(raw);
+    if (key == null) return const [];
+    return [
+      VideoTrailer(key: key, site: 'YouTube', type: 'Trailer', name: _title),
+    ];
+  }
+
+  /// Extrait l'id YouTube d'une URL (`?v=`, `youtu.be/…`) ou d'un id brut.
+  String? _youtubeKeyOf(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (uri != null && uri.hasScheme) {
+      final v = uri.queryParameters['v'];
+      if (v != null && v.isNotEmpty) return v;
+      if (uri.host.toLowerCase().contains('youtu.be')) {
+        final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+        if (id != null && id.isNotEmpty) return id;
+      }
+      return null;
+    }
+    return raw.length >= 8 && !raw.contains('/') ? raw : null;
+  }
+
+  /// Ouvre une bande-annonce (choix si plusieurs) dans le navigateur.
+  Future<void> _openTrailer() async {
+    final trailers = _availableTrailers;
+    if (trailers.isEmpty) return;
+    VideoTrailer chosen = trailers.first;
+    if (trailers.length > 1) {
+      final selected = await showModalBottomSheet<VideoTrailer>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(
+                dense: true,
+                title: Text('Bande-annonces'),
+                titleTextStyle: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              for (final t in trailers)
+                ListTile(
+                  leading: const Icon(Icons.play_circle_outline),
+                  title: Text(
+                    (t.name?.isNotEmpty ?? false) ? t.name! : 'Bande-annonce',
+                  ),
+                  subtitle: Text(
+                    [
+                      if (t.type.isNotEmpty) t.type,
+                      if (t.language != null && t.language!.isNotEmpty)
+                        t.language!.toUpperCase(),
+                    ].join(' · '),
+                  ),
+                  onTap: () => Navigator.of(context).pop(t),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (selected == null) return;
+      chosen = selected;
+    }
+    try {
+      await launchUrl(
+        Uri.parse(chosen.url),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      // Aucun navigateur disponible : on ignore.
+    }
   }
 
   String? get _containerExt {
@@ -242,7 +342,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     return _Target(r.season, r.episode, 0);
   }
 
-  void _playMovie() {
+  void _playMovie({bool fromStart = false}) {
     final ext = _containerExt ?? 'mp4';
     final url = _client.vodUrl(widget.id, ext: ext);
     final resume = _resume;
@@ -254,7 +354,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         subtitle: 'Film',
         contentId: _tmdbId,
         contentType: _tmdbId == null ? null : 'vod',
-        initialPosition: (resume != null && resume.watchTime > 5)
+        initialPosition: (!fromStart && resume != null && resume.watchTime > 5)
             ? Duration(seconds: resume.watchTime.round())
             : null,
       ),
@@ -285,7 +385,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     ));
   }
 
-  void _playTarget() {
+  void _playTarget({bool fromStart = false}) {
     final t = _target;
     if (t == null) return;
     final list = _episodes['${t.season}'] ?? const [];
@@ -299,8 +399,37 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     }
     _playEpisode(
       episode,
-      position: t.position > 5 ? Duration(seconds: t.position.round()) : null,
+      position: (!fromStart && t.position > 5)
+          ? Duration(seconds: t.position.round())
+          : null,
     );
+  }
+
+  /// Premier épisode disponible (plus petite saison), sans reprise.
+  void _playFirstEpisode() {
+    final seasons =
+        _episodes.keys.map(int.tryParse).whereType<int>().toList()..sort();
+    for (final season in seasons) {
+      final list = _episodes['$season'] ?? const [];
+      if (list.isNotEmpty) {
+        _playEpisode(list.first);
+        return;
+      }
+    }
+  }
+
+  /// Espace : lecture / reprise ; Ctrl+Espace : depuis le début.
+  void _playOrResume({required bool fromStart}) {
+    if (_loading || _error != null) return;
+    if (widget.kind == MediaKind.vod) {
+      _playMovie(fromStart: fromStart);
+      return;
+    }
+    if (_target != null) {
+      _playTarget(fromStart: fromStart);
+    } else {
+      _playFirstEpisode();
+    }
   }
 
   void _maybeAutoPlay() {
@@ -326,81 +455,92 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     });
   }
 
+  /// Échap / Retour : revient à la liste. Espace : lecture/reprise.
+  /// Ctrl+Espace : lecture depuis le début.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.goBack ||
+        key == LogicalKeyboardKey.browserBack) {
+      Navigator.of(context).maybePop();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.space) {
+      final fromStart = HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isMetaPressed;
+      _playOrResume(fromStart: fromStart);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final target = _target;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_title),
-        actions: [
-          if (_tmdbId != null)
-            ListenableBuilder(
-              listenable: widget.state,
-              builder: (context, _) {
-                final type = widget.kind == MediaKind.vod ? 'vod' : 'serie';
-                final fav = widget.state.isFavorite(_tmdbId!, type);
-                return IconButton(
-                  tooltip: fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
-                  icon: Icon(fav ? Icons.favorite : Icons.favorite_border),
-                  onPressed: () => widget.state.toggleFavorite(_tmdbId!, type),
-                );
-              },
-            ),
-        ],
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: Scaffold(
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text('Erreur: $_error'),
+                    ),
+                  )
+                : MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      textScaler: const TextScaler.linear(1.5),
+                    ),
+                    child: Stack(
+                      children: [
+                        // Image du film en fond de toute la page (y compris
+                        // derrière la distribution).
+                        Positioned.fill(child: _pageBackground(theme)),
+                        ListView(
+                        children: [
+                          _header(theme, target),
+                          if (widget.kind == MediaKind.serie)
+                            _episodesSection(theme),
+                          _castSection(theme),
+                          const SizedBox(height: 24),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text('Erreur: $_error'),
-                  ),
-                )
-              : MediaQuery(
-                  data: MediaQuery.of(context).copyWith(
-                    textScaler: const TextScaler.linear(1.3),
-                  ),
-                  child: ListView(
-                  children: [
-                    _header(theme, target),
-                    if (widget.kind == MediaKind.serie) _episodesSection(theme),
-                    _castSection(theme),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-                ),
     );
   }
 
   /// Marge horizontale unique de la fiche (toutes les sections l'utilisent).
   static const double _pad = 20;
 
-  /// En-tête : backdrop, titre + bouton, puis affiche qui chevauche le
-  /// backdrop juste sous la ligne d'année.
+  /// En-tête : barre retour, titre + méta, puis affiche avec, à sa droite, les
+  /// étiquettes de genre et le descriptif.
   Widget _header(ThemeData theme, _Target? target) {
-    return Stack(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 280,
-          child: _backdropLayer(theme),
+        // Décalage de -14 pour que le glyphe du bouton retombe pile sur la
+        // marge _pad du titre (le bouton a 14 px de padding interne).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(_pad - 14, 8, _pad, 0),
+          child: _topBar(),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(_pad, 12, _pad, 0),
-              child: _titleRow(theme, target),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: _pad),
-              child: Row(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(_pad, 8, _pad, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _titleRow(theme, target),
+              const SizedBox(height: 18),
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _posterBox(theme),
@@ -408,14 +548,296 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                   Expanded(child: _detailsColumn(theme, target)),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _backdropLayer(ThemeData theme) {
+  /// Retour + favori en haut de la fiche. Pas de barre d'application : le
+  /// cadre est géré par le gestionnaire de fenêtres.
+  Widget _topBar() {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        TextButton.icon(
+          style: TextButton.styleFrom(
+            iconSize: 30,
+            textStyle: theme.textTheme.titleLarge,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            minimumSize: const Size(0, 52),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: const Icon(Icons.arrow_back),
+          label: const Text('retour'),
+        ),
+        const Spacer(),
+        if (_tmdbId != null)
+          ListenableBuilder(
+            listenable: widget.state,
+            builder: (context, _) {
+              final type = widget.kind == MediaKind.vod ? 'vod' : 'serie';
+              final fav = widget.state.isFavorite(_tmdbId!, type);
+              return IconButton(
+                tooltip: fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
+                iconSize: 32,
+                padding: const EdgeInsets.all(12),
+                constraints: const BoxConstraints(
+                  minWidth: 56,
+                  minHeight: 56,
+                ),
+                icon: Icon(fav ? Icons.favorite : Icons.favorite_border),
+                onPressed: () => widget.state.toggleFavorite(_tmdbId!, type),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  /// Genre(s) sous forme d'étiquettes arrondies, puis l'icône d'infos du flux.
+  Widget _genreTags(ThemeData theme, List<String> genres) {
+    final color = theme.colorScheme.onSurface;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final genre in genres)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              border: Border.all(color: color.withValues(alpha: 0.5)),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              genre,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        _streamInfoButton(theme),
+      ],
+    );
+  }
+
+  /// Icône « i » : popover avec les infos du flux.
+  Widget _streamInfoButton(ThemeData theme) {
+    final hasStream = _streamUrlForInfo != null;
+    return MenuAnchor(
+      alignmentOffset: const Offset(0, 8),
+      menuChildren: [
+        _StreamInfoPanel(
+          baseRows: _streamInfoRows,
+          extraProbe: hasStream ? _buildStreamInfo : null,
+        ),
+      ],
+      builder: (context, controller, child) => IconButton(
+        tooltip: 'Infos du flux',
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.info_outline),
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+      ),
+    );
+  }
+
+  /// Lignes immédiates de la fiche flux (avant le sondage média/HTTP).
+  List<(String, String)> get _streamInfoRows {
+    final host = Uri.tryParse(_client.baseUrl)?.host ?? _client.baseUrl;
+    final rows = <(String, String)>[
+      ('Serveur', host),
+      ('Type', widget.kind == MediaKind.vod ? 'Film' : 'Série'),
+    ];
+    final t = _target;
+    if (widget.kind == MediaKind.serie && t != null) {
+      rows.add(('Épisode', 'S${t.season} E${t.episode}'));
+    }
+    rows.add(('ID flux', '${widget.id}'));
+    rows.add(('Conteneur', _containerExt ?? '—'));
+    final quality = _qualityLabel;
+    if (quality != null) rows.add(('Qualité', quality));
+    final duration = _duration;
+    if (duration != null) rows.add(('Durée', duration));
+    return rows;
+  }
+
+  /// Sondage réel du flux (media_kit + HEAD) pour des infos exactes.
+  Future<List<(String, String)>> _buildStreamInfo() async {
+    final url = _streamUrlForInfo;
+    if (url == null) return const [];
+    final results = await Future.wait<Object?>([
+      _probeMedia(url),
+      _probeSize(),
+    ]);
+    final probe = results[0] as _StreamProbe?;
+    final bytes = results[1] as int?;
+    final rows = <(String, String)>[];
+    if (probe != null) {
+      if (probe.width != null && probe.height != null) {
+        rows.add(('Résolution', '${probe.width}×${probe.height}'));
+      } else if (probe.height != null) {
+        rows.add(('Résolution', '${probe.height}p'));
+      }
+      if (probe.videoCodec != null) rows.add(('Vidéo', probe.videoCodec!));
+      if (probe.fps != null) {
+        rows.add(('Images/s', probe.fps!.toStringAsFixed(2)));
+      }
+      if (probe.audioCodec != null) rows.add(('Audio', probe.audioCodec!));
+      final audioDetails = <String>[
+        if (probe.audioChannels != null) probe.audioChannels!,
+        if (probe.sampleRate != null)
+          '${(probe.sampleRate! / 1000).toStringAsFixed(1)} kHz',
+      ];
+      if (audioDetails.isNotEmpty) {
+        rows.add(('Audio (détails)', audioDetails.join(' · ')));
+      }
+      if (probe.bitrate != null && probe.bitrate! > 0) {
+        rows.add((
+          'Débit (média)',
+          '${(probe.bitrate! / 1000000).toStringAsFixed(2)} Mb/s',
+        ));
+      }
+    }
+    if (bytes != null) {
+      rows.add(('Taille', _fmtBytes(bytes)));
+      final seconds = probe?.durationSeconds ?? _durationSeconds;
+      if (seconds != null && seconds > 0) {
+        rows.add(('Débit moyen', _fmtRate(bytes, seconds)));
+      }
+    }
+    return rows;
+  }
+
+  /// Ouvre brièvement le flux dans un Player muet pour lire codecs/rendu.
+  Future<_StreamProbe?> _probeMedia(String url) async {
+    final player = Player(
+      configuration: const PlayerConfiguration(logLevel: MPVLogLevel.error),
+    );
+    final completer = Completer<_StreamProbe?>();
+    final subs = <StreamSubscription<dynamic>>[];
+    void finish() {
+      if (completer.isCompleted) return;
+      completer.complete(_StreamProbe.fromState(player.state));
+    }
+
+    subs.add(player.stream.tracks.listen((tracks) {
+      if (tracks.video.isNotEmpty || tracks.audio.isNotEmpty) finish();
+    }));
+    final timer = Timer(const Duration(seconds: 8), finish);
+    try {
+      await player
+          .open(
+            Media(url, httpHeaders: {'User-Agent': MizuConfig.userAgent}),
+            play: false,
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // On garde ce qui a pu être lu.
+    }
+    _StreamProbe? probe;
+    try {
+      probe = await completer.future.timeout(
+        const Duration(seconds: 9),
+        onTimeout: () => _StreamProbe.fromState(player.state),
+      );
+    } catch (_) {
+      probe = null;
+    }
+    timer.cancel();
+    for (final s in subs) {
+      await s.cancel();
+    }
+    try {
+      await player.dispose();
+    } catch (_) {}
+    return probe;
+  }
+
+  /// URL du flux qui serait lu (film, ou épisode cible d'une série).
+  String? get _streamUrlForInfo {
+    if (widget.kind == MediaKind.vod) {
+      return _client.vodUrl(widget.id, ext: _containerExt ?? 'mp4');
+    }
+    final ep = _targetEpisode;
+    if (ep == null) return null;
+    final id = int.tryParse(ep['id']?.toString() ?? '');
+    if (id == null) return null;
+    final ext = ep['container_extension']?.toString() ?? 'mp4';
+    return _client.seriesUrl(id, ext: ext);
+  }
+
+  Map<String, dynamic>? get _targetEpisode {
+    final t = _target;
+    if (t == null) return null;
+    final list = _episodes['${t.season}'] ?? const [];
+    for (final e in list) {
+      if ((e['episode_num'] as num?)?.toInt() == t.episode) return e;
+    }
+    return list.isNotEmpty ? list.first : null;
+  }
+
+  /// Taille du flux via HEAD (Content-Length ou Content-Range), si exposée.
+  Future<int?> _probeSize() async {
+    final url = _streamUrlForInfo;
+    if (url == null) return null;
+    try {
+      final res = await http
+          .head(Uri.parse(url), headers: {'User-Agent': MizuConfig.userAgent})
+          .timeout(const Duration(seconds: 12));
+      final len = int.tryParse(res.headers['content-length'] ?? '');
+      if (len != null && len > 0) return len;
+      final range = res.headers['content-range'];
+      final total = range?.split('/').last.trim();
+      final parsed = total == null ? null : int.tryParse(total);
+      if (parsed != null && parsed > 0) return parsed;
+    } catch (_) {
+      // Taille indisponible : le panneau masque simplement la ligne.
+    }
+    return null;
+  }
+
+  int? get _durationSeconds {
+    final secs = int.tryParse(_info?['duration_secs']?.toString() ?? '');
+    if (secs != null && secs > 0) return secs;
+    final raw = _info?['duration']?.toString().trim();
+    final hms =
+        raw == null ? null : RegExp(r'^(\d+):(\d{2}):(\d{2})$').firstMatch(raw);
+    if (hms == null) return null;
+    return int.parse(hms.group(1)!) * 3600 +
+        int.parse(hms.group(2)!) * 60 +
+        int.parse(hms.group(3)!);
+  }
+
+  String? get _qualityLabel {
+    final raw = (_info?['quality'] ?? _info?['resolution'])?.toString().trim();
+    if (raw != null && raw.isNotEmpty) return raw;
+    final title = _title.toUpperCase();
+    for (final q in const ['2160P', '4K', 'UHD', '1080P', 'FHD', '720P', 'HD', 'SD']) {
+      if (title.contains(q)) return q == 'FHD' ? 'FHD (1080p)' : q;
+    }
+    return null;
+  }
+
+  /// Styles du film, découpés en étiquettes.
+  List<String> get _genres {
+    final raw = _info?['genre']?.toString().trim() ?? '';
+    if (raw.isEmpty) return const [];
+    final seen = <String>{};
+    return raw
+        .split(RegExp(r'[,/|]| & '))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && seen.add(s))
+        .toList();
+  }
+
+  /// Image du film en fond de toute la page, avec un dégradé marqué et haut
+  /// pour rendre le titre et la méta lisibles.
+  Widget _pageBackground(ThemeData theme) {
     final backdrop = _backdropUrl;
     final colors = theme.colorScheme;
     return Stack(
@@ -425,6 +847,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
           Image.network(
             backdrop,
             fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
             errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
         DecoratedBox(
@@ -433,11 +856,14 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                colors.surface.withValues(alpha: backdrop == null ? 1 : 0.8),
-                colors.surface.withValues(alpha: backdrop == null ? 1 : 0.35),
+                colors.surface.withValues(alpha: backdrop == null ? 1 : 0.99),
+                colors.surface.withValues(alpha: backdrop == null ? 1 : 0.95),
+                colors.surface.withValues(alpha: backdrop == null ? 1 : 0.72),
+                colors.surface.withValues(alpha: backdrop == null ? 1 : 0.45),
+                colors.surface.withValues(alpha: backdrop == null ? 1 : 0.78),
                 colors.surface,
               ],
-              stops: const [0, 0.6, 1],
+              stops: const [0.0, 0.2, 0.45, 0.65, 0.85, 1.0],
             ),
           ),
         ),
@@ -445,27 +871,22 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     );
   }
 
-  /// Titre, note, classification, méta à gauche ; bouton de lecture à droite.
+  /// Titre (étoiles juste après) puis année (en gras) · durée.
   Widget _titleRow(ThemeData theme, _Target? target) {
     final colors = theme.colorScheme;
     final rating = _rating;
-    final meta = [
-      _year,
-      _duration,
-      _info?['genre']?.toString(),
-    ].whereType<String>().where((s) => s.trim().isNotEmpty).toList();
 
     final play = widget.kind == MediaKind.vod
         ? FilledButton.icon(
             style: _playButtonStyle(theme),
-            onPressed: _playMovie,
+            onPressed: () => _playMovie(),
             icon: const Icon(Icons.play_arrow),
             label: Text(_resume == null ? 'Lecture' : 'Reprendre'),
           )
         : target != null
             ? FilledButton.icon(
                 style: _playButtonStyle(theme),
-                onPressed: _playTarget,
+                onPressed: () => _playTarget(),
                 icon: const Icon(Icons.play_arrow),
                 label: Text('S${target.season} E${target.episode}'),
               )
@@ -479,40 +900,79 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                _title,
-                style: theme.textTheme.displaySmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
+              Text.rich(
+                TextSpan(
+                  style: theme.textTheme.displaySmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                  children: [
+                    TextSpan(text: _title),
+                    // Étoiles juste après le titre, suivies de la note.
+                    // Cliquables : ouvre la fiche TMDB.
+                    if (rating != null)
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: MouseRegion(
+                          cursor: _tmdbId == null
+                              ? MouseCursor.defer
+                              : SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap: _tmdbId == null ? null : _openTmdb,
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.only(left: 14, top: 2, bottom: 2),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _stars(rating),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${rating.toStringAsFixed(1)}/5',
+                                    style:
+                                        theme.textTheme.titleMedium?.copyWith(
+                                      color: colors.onSurface
+                                          .withValues(alpha: 0.88),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (rating != null || _cert != null) ...[
-                const SizedBox(height: 10),
-                Row(
+              if (_year != null || _duration != null || _cert != null) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    if (rating != null) ...[
-                      _stars(rating),
-                      const SizedBox(width: 10),
-                      Text(
-                        '${rating.toStringAsFixed(1)} / 5',
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(color: colors.onSurfaceVariant),
+                    if (_year != null || _duration != null)
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            if (_year != null)
+                              TextSpan(
+                                text: _year,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700),
+                              ),
+                            if (_year != null && _duration != null)
+                              const TextSpan(text: ' · '),
+                            if (_duration != null) TextSpan(text: _duration),
+                          ],
+                        ),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: colors.onSurface.withValues(alpha: 0.9),
+                        ),
                       ),
-                    ],
-                    if (rating != null && _cert != null)
-                      const SizedBox(width: 14),
                     if (_cert != null) _certBadge(theme),
                   ],
-                ),
-              ],
-              if (meta.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  meta.join(' · '),
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(color: colors.onSurfaceVariant),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ],
@@ -521,13 +981,13 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         if (play != null)
           Padding(
             padding: const EdgeInsets.only(left: 24, right: 4),
-            child: play,
+            child: _HoverLift(child: play),
           ),
       ],
     );
   }
 
-  /// Affiche verticale (200×300) avec repli si absente.
+  /// Affiche verticale (300×450) avec repli si absente.
   Widget _posterBox(ThemeData theme) {
     final fallback = Container(
       color: theme.colorScheme.surfaceContainerHighest,
@@ -536,8 +996,8 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
-        width: 200,
-        height: 300,
+        width: 300,
+        height: 450,
         child: _poster == null
             ? fallback
             : Image.network(
@@ -549,24 +1009,66 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     );
   }
 
-  /// Description et infos de reprise, à droite de l'affiche.
+  /// Étiquettes de genre, descriptif et infos de reprise, à droite de l'affiche.
   Widget _detailsColumn(ThemeData theme, _Target? target) {
+    final light = theme.colorScheme.onSurface.withValues(alpha: 0.9);
+    final genres = _genres;
+    final plot = _plot;
+    final trailers = _availableTrailers;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_plot != null)
-          Text(_plot!, style: theme.textTheme.bodyMedium),
+        // Toujours affiché : l'icône « i » (infos flux) vit à côté des tags.
+        _genreTags(theme, genres),
+        const SizedBox(height: 12),
+        if (plot != null) ...[
+          Text(
+            plot,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurface,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (trailers.isNotEmpty) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: const Size(0, 34),
+                textStyle: theme.textTheme.bodyMedium,
+              ),
+              onPressed: _openTrailer,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.movie_filter_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  const Text('Bande-annonce'),
+                  if (trailers.length > 1) ...[
+                    const SizedBox(width: 4),
+                    const Icon(Icons.expand_more, size: 18),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         if (widget.kind == MediaKind.serie && target != null)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.only(top: 4),
             child: Text(
               target.isNext
                   ? 'épisode suivant'
                   : target.position > 5
                       ? 'à ${_mmss(target.position)}'
                       : 'depuis le début',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodyMedium?.copyWith(color: light),
             ),
           ),
         if (_tmdbId == null)
@@ -575,8 +1077,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
             child: Text(
               'Pas d\'identifiant TMDB : favoris et reprise '
               'ne seront pas synchronisés.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodyMedium?.copyWith(color: light),
             ),
           ),
       ],
@@ -601,18 +1102,18 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       children: [
         for (var i = 0; i < 5; i++)
           SizedBox(
-            width: 28,
-            height: 28,
+            width: 24,
+            height: 24,
             child: Stack(
               children: [
                 Icon(Icons.star_rounded,
-                    size: 28, color: amber.withValues(alpha: 0.22)),
+                    size: 24, color: amber.withValues(alpha: 0.22)),
                 ClipRect(
                   child: Align(
                     alignment: Alignment.centerLeft,
                     widthFactor: (rating - i).clamp(0.0, 1.0),
                     child: const Icon(Icons.star_rounded,
-                        size: 28, color: amber),
+                        size: 24, color: amber),
                   ),
                 ),
               ],
@@ -704,6 +1205,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         .toList();
   }
 
+  /// Nombre d'acteurs affichés avant « Voir plus ».
+  static const int _castPreview = 10;
+
   Widget _castSection(ThemeData theme) {
     final directors = _directors;
     final composers = _composers;
@@ -711,6 +1215,10 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     if (directors.isEmpty && composers.isEmpty && cast.isEmpty) {
       return const SizedBox.shrink();
     }
+    final hasMore = cast.length > _castPreview;
+    final visible = _showAllCast || !hasMore
+        ? cast
+        : cast.take(_castPreview).toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -720,15 +1228,31 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         ),
         if (directors.isNotEmpty) _crewLine(theme, 'Réalisation', directors),
         if (composers.isNotEmpty) _crewLine(theme, 'Musique', composers),
-        if (cast.isNotEmpty)
+        if (visible.isNotEmpty)
           SizedBox(
             height: 210,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: _pad, vertical: 8),
-              itemCount: cast.length,
+              itemCount: visible.length,
               separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, i) => _personTile(theme, cast[i]),
+              itemBuilder: (context, i) => _personTile(theme, visible[i]),
+            ),
+          ),
+        if (hasMore)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(_pad, 0, _pad, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _showAllCast = !_showAllCast),
+                icon: Icon(_showAllCast ? Icons.expand_less : Icons.expand_more),
+                label: Text(
+                  _showAllCast
+                      ? 'Voir moins'
+                      : 'Voir plus (${cast.length - _castPreview})',
+                ),
+              ),
             ),
           ),
       ],
@@ -742,7 +1266,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         TextSpan(children: [
           TextSpan(
             text: '$label : ',
-            style: TextStyle(color: theme.colorScheme.outline),
+            style: TextStyle(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+            ),
           ),
           TextSpan(text: names.join(', ')),
         ]),
@@ -785,8 +1311,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
               person.character!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
+              ),
             ),
         ],
       ),
@@ -916,4 +1443,213 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       ),
     );
   }
+}
+
+/// Léger effet de survol (échelle + halo) pour le bouton de lecture.
+class _HoverLift extends StatefulWidget {
+  const _HoverLift({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_HoverLift> createState() => _HoverLiftState();
+}
+
+class _HoverLiftState extends State<_HoverLift> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedScale(
+        scale: _hovered ? 1.04 : 1,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : null,
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Panneau « infos du flux » affiché en popover, avec sondage média + taille.
+class _StreamInfoPanel extends StatefulWidget {
+  const _StreamInfoPanel({required this.baseRows, this.extraProbe});
+
+  final List<(String, String)> baseRows;
+  final Future<List<(String, String)>> Function()? extraProbe;
+
+  @override
+  State<_StreamInfoPanel> createState() => _StreamInfoPanelState();
+}
+
+class _StreamInfoPanelState extends State<_StreamInfoPanel> {
+  List<(String, String)>? _extra;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _probe();
+  }
+
+  Future<void> _probe() async {
+    final probe = widget.extraProbe;
+    if (probe == null) return;
+    setState(() => _loading = true);
+    List<(String, String)> extra = const [];
+    try {
+      extra = await probe();
+    } catch (_) {
+      // Sondage partiel : on affiche au moins les lignes de base.
+    }
+    if (!mounted) return;
+    setState(() {
+      _extra = extra;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final rows = <(String, String)>[
+      ...widget.baseRows,
+      ...?_extra,
+    ];
+    return SizedBox(
+      width: 460,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline,
+                    size: 22, color: theme.colorScheme.primary),
+                const SizedBox(width: 10),
+                Text('Infos du flux', style: theme.textTheme.titleLarge),
+              ],
+            ),
+            const SizedBox(height: 14),
+            for (final row in rows) _infoRow(theme, row.$1, row.$2),
+            if (_loading) ...[
+              const SizedBox(height: 14),
+              const LinearProgressIndicator(minHeight: 2),
+              const SizedBox(height: 6),
+              Text(
+                'Analyse du flux…',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.outline),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(ThemeData theme, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 150,
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Résultat du sondage media_kit : codecs, résolution, débit…
+class _StreamProbe {
+  const _StreamProbe({
+    this.width,
+    this.height,
+    this.videoCodec,
+    this.fps,
+    this.audioCodec,
+    this.audioChannels,
+    this.sampleRate,
+    this.bitrate,
+    this.durationSeconds,
+  });
+
+  final int? width;
+  final int? height;
+  final String? videoCodec;
+  final double? fps;
+  final String? audioCodec;
+  final String? audioChannels;
+  final int? sampleRate;
+  final int? bitrate;
+  final int? durationSeconds;
+
+  factory _StreamProbe.fromState(PlayerState state) {
+    final video =
+        state.tracks.video.isNotEmpty ? state.tracks.video.first : null;
+    final audio =
+        state.tracks.audio.isNotEmpty ? state.tracks.audio.first : null;
+    final params = state.videoParams;
+    final duration = state.duration;
+    return _StreamProbe(
+      width: video?.w ?? params.w,
+      height: video?.h ?? params.h,
+      videoCodec: video?.codec,
+      fps: video?.fps,
+      audioCodec: audio?.codec,
+      audioChannels: audio?.channels ?? audio?.channelscount?.toString(),
+      sampleRate: audio?.samplerate,
+      bitrate: video?.bitrate ?? audio?.bitrate,
+      durationSeconds: duration.inSeconds > 0 ? duration.inSeconds : null,
+    );
+  }
+}
+
+String _fmtBytes(int bytes) {
+  if (bytes >= 1 << 30) return '${(bytes / (1 << 30)).toStringAsFixed(2)} Go';
+  if (bytes >= 1 << 20) return '${(bytes / (1 << 20)).toStringAsFixed(1)} Mo';
+  return '${(bytes / 1024).toStringAsFixed(0)} Ko';
+}
+
+String _fmtRate(int bytes, int seconds) {
+  final moPerSec = bytes / seconds / (1 << 20);
+  final mbps = bytes * 8 / seconds / 1000000;
+  return '${moPerSec.toStringAsFixed(2)} Mo/s (${mbps.toStringAsFixed(1)} Mb/s)';
 }

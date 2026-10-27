@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../data/metadata_service.dart';
 import '../mizu_config.dart';
 import '../state/app_state.dart';
+import 'sections.dart';
 
 /// Préférences : backend Supabase, clé TMDB, compte.
 ///
@@ -29,6 +30,9 @@ class _SettingsPageState extends State<SettingsPage> {
   late final _key = TextEditingController(text: MizuConfig.publishableKey);
   late final _tmdb = TextEditingController(text: MizuConfig.tmdbApiKey ?? '');
   late final _ua = TextEditingController(text: MizuConfig.userAgent);
+
+  /// Ordre local des sections (modifié par glisser-déposer).
+  final List<String> _order = List<String>.of(MizuConfig.sectionOrder);
 
   int? _cacheCount;
   bool _clearing = false;
@@ -53,6 +57,97 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (_) {
       // Cache illisible : on n'affiche pas de compteur.
     }
+  }
+
+  /// Réordonne les sections (glisser-déposer) et enregistre aussitôt.
+  void _reorderSection(int oldIndex, int newIndex) {
+    setState(() {
+      final item = _order.removeAt(oldIndex);
+      _order.insert(newIndex, item);
+    });
+    _persistOrder();
+  }
+
+  /// Déplace une section d'un cran (flèches, pratique à la télécommande).
+  void _nudgeSection(int index, int delta) {
+    final target = index + delta;
+    if (target < 0 || target >= _order.length) return;
+    setState(() {
+      final item = _order.removeAt(index);
+      _order.insert(target, item);
+    });
+    _persistOrder();
+  }
+
+  Future<void> _persistOrder() async {
+    await MizuConfig.save(sectionOrder: _order);
+  }
+
+  /// Préférence « Ordre des sections » : glisser-déposer + flèches.
+  Widget _sectionOrderEditor(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Ordre des sections', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Ordre des onglets d\'une source (Live TV / Films / Séries). '
+          'Glisse une ligne, ou utilise les flèches pour la déplacer.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 12),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: _order.length,
+          onReorderItem: _reorderSection,
+          proxyDecorator: (child, index, animation) => Material(
+            color: theme.colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(12),
+            elevation: 6,
+            child: child,
+          ),
+          itemBuilder: (context, index) {
+            final key = _order[index];
+            return Card(
+              key: ValueKey(key),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: ListTile(
+                leading: Icon(LibrarySection.icon(key)),
+                title: Text(LibrarySection.label(key)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.keyboard_arrow_up),
+                      tooltip: 'Monter',
+                      onPressed:
+                          index == 0 ? null : () => _nudgeSection(index, -1),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.keyboard_arrow_down),
+                      tooltip: 'Descendre',
+                      onPressed: index == _order.length - 1
+                          ? null
+                          : () => _nudgeSection(index, 1),
+                    ),
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 10),
+                        child: Icon(Icons.drag_handle),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   Future<void> _clearCache() async {
@@ -148,6 +243,7 @@ class _SettingsPageState extends State<SettingsPage> {
         userAgent: _ua.text.trim().isEmpty
             ? MizuConfig.defaultUserAgent
             : _ua.text.trim(),
+        sectionOrder: _order,
       );
       widget.state?.metadata.reloadKey();
       if (!mounted) return;
@@ -375,6 +471,8 @@ class _SettingsPageState extends State<SettingsPage> {
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.outline),
           ),
+          const SizedBox(height: 28),
+          _sectionOrderEditor(theme),
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!, style: TextStyle(color: theme.colorScheme.error)),

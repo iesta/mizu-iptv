@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import '../data/xtream_client.dart';
+import '../mizu_config.dart';
 import '../state/app_state.dart';
 import 'media_detail_page.dart';
+import 'sections.dart';
 import 'tv_focus.dart';
 import 'player_page.dart';
 
@@ -13,13 +16,17 @@ class XtreamBrowserPage extends StatefulWidget {
     super.key,
     required this.state,
     required this.source,
-    this.initialTab = 0,
+    this.initialTab,
     this.autoPlayFilter,
   });
 
   final AppState state;
   final PlaylistSource source;
-  final int initialTab;
+
+  /// Section à ouvrir en premier : 0 = Live TV, 1 = Films, 2 = Séries.
+  /// `null` (ouverture normale d'une source) = premier onglet de l'ordre des
+  /// préférences.
+  final int? initialTab;
 
   /// Dev uniquement : ouvre le premier élément dont le nom contient ce filtre.
   final String? autoPlayFilter;
@@ -44,50 +51,78 @@ class _XtreamBrowserPageState extends State<XtreamBrowserPage> {
 
   @override
   Widget build(BuildContext context) {
+    // L'ordre des sections est une préférence (Préférences, glisser-déposer).
+    final order = MizuConfig.sectionOrder;
+    final requested = widget.initialTab;
+    final initialKey = requested == null
+        ? null
+        : switch (requested.clamp(0, 2)) {
+            1 => 'vod',
+            2 => 'serie',
+            _ => 'live',
+          };
+    // Sans section demandée, on ouvre le premier onglet de l'ordre préféré.
+    final initialIndex = initialKey == null
+        ? 0
+        : order.indexOf(initialKey).clamp(0, order.length - 1);
     return DefaultTabController(
-      length: 3,
-      initialIndex: widget.initialTab.clamp(0, 2),
+      length: order.length,
+      initialIndex: initialIndex,
       child: Scaffold(
         appBar: AppBar(
           title: Text(widget.source.name),
-          bottom: const TabBar(
+          bottom: TabBar(
             tabs: [
-              Tab(icon: Icon(Icons.live_tv_outlined), text: 'Live TV'),
-              Tab(icon: Icon(Icons.movie_outlined), text: 'Films'),
-              Tab(icon: Icon(Icons.video_library_outlined), text: 'Séries'),
+              for (final key in order)
+                Tab(
+                  icon: Icon(LibrarySection.icon(key)),
+                  text: LibrarySection.label(key),
+                ),
             ],
           ),
         ),
         body: TabBarView(
           children: [
-            _CatalogTab(
-              client: _client,
-              kind: _Kind.live,
-              autoPlayFilter: widget.initialTab == 0 ? widget.autoPlayFilter : null,
-              loadCategories: _client.liveCategories,
-              loadItems: (cat) => _client.liveStreams(categoryId: cat),
-              state: widget.state,
-            ),
-            _CatalogTab(
-              client: _client,
-              kind: _Kind.vod,
-              autoPlayFilter: widget.initialTab == 1 ? widget.autoPlayFilter : null,
-              loadCategories: _client.vodCategories,
-              loadItems: (cat) => _client.vodStreams(categoryId: cat),
-              state: widget.state,
-            ),
-            _CatalogTab(
-              client: _client,
-              kind: _Kind.serie,
-              autoPlayFilter: widget.initialTab == 2 ? widget.autoPlayFilter : null,
-              loadCategories: _client.seriesCategories,
-              loadItems: (cat) => _client.series(categoryId: cat),
-              state: widget.state,
-            ),
+            for (final key in order)
+              _catalogTab(key, key == initialKey ? widget.autoPlayFilter : null),
           ],
         ),
+        endDrawer: const _CatalogSettingsDrawer(),
       ),
     );
+  }
+
+  /// Onglet de catalogue correspondant à une clé de section (`live`/`vod`/`serie`).
+  Widget _catalogTab(String key, String? autoPlayFilter) {
+    switch (key) {
+      case 'vod':
+        return _CatalogTab(
+          client: _client,
+          kind: _Kind.vod,
+          autoPlayFilter: autoPlayFilter,
+          loadCategories: _client.vodCategories,
+          loadItems: (cat) => _client.vodStreams(categoryId: cat),
+          state: widget.state,
+        );
+      case 'serie':
+        return _CatalogTab(
+          client: _client,
+          kind: _Kind.serie,
+          autoPlayFilter: autoPlayFilter,
+          loadCategories: _client.seriesCategories,
+          loadItems: (cat) => _client.series(categoryId: cat),
+          state: widget.state,
+        );
+      default:
+        return _CatalogTab(
+          client: _client,
+          kind: _Kind.live,
+          autoPlayFilter: autoPlayFilter,
+          loadCategories: _client.liveCategories,
+          loadItems: (cat) => _client.liveStreams(categoryId: cat),
+          state: widget.state,
+        );
+    }
   }
 }
 
@@ -119,6 +154,8 @@ class _CatalogTabState extends State<_CatalogTab> {
   List<dynamic>? _items;
   String? _categoryId;
   String _filter = '';
+  final TextEditingController _search = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   String? _error;
   bool _loading = false;
 
@@ -126,6 +163,13 @@ class _CatalogTabState extends State<_CatalogTab> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _searchFocus.dispose();
+    super.dispose();
   }
 
   /// Un seul chargement par section : catégories + catalogue complet.
@@ -186,6 +230,7 @@ class _CatalogTabState extends State<_CatalogTab> {
       .toString();
 
   List<Map<String, dynamic>>? _sortedCache;
+  String? _sortedFor;
 
   /// Horodatage d'ajout du média (secondes Unix), 0 si absent.
   static int _addedAt(Map<String, dynamic> item) {
@@ -201,16 +246,54 @@ class _CatalogTabState extends State<_CatalogTab> {
     return 0;
   }
 
-  /// Tout le catalogue, du plus récemment ajouté au plus ancien.
+  /// Note normalisée sur 5 (0 si absente), à partir de `rating_5based` ou
+  /// `rating` (souvent sur 10 chez Xtream).
+  static double _ratingOf(Map<String, dynamic> item) {
+    final five = double.tryParse(item['rating_5based']?.toString() ?? '');
+    if (five != null && five > 0) return five.clamp(0.0, 5.0);
+    final raw = double.tryParse(item['rating']?.toString() ?? '');
+    if (raw == null || raw <= 0) return 0;
+    return (raw > 5 ? raw / 2 : raw).clamp(0.0, 5.0);
+  }
+
+  int _compareBySort(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+    String sort,
+  ) {
+    final nameA = _name(a).toLowerCase();
+    final nameB = _name(b).toLowerCase();
+    switch (sort) {
+      case 'oldest':
+        return _addedAt(a).compareTo(_addedAt(b));
+      case 'name_asc':
+        return nameA.compareTo(nameB);
+      case 'name_desc':
+        return nameB.compareTo(nameA);
+      case 'rating_desc':
+        final c = _ratingOf(b).compareTo(_ratingOf(a));
+        return c != 0 ? c : nameA.compareTo(nameB);
+      case 'rating_asc':
+        final c = _ratingOf(a).compareTo(_ratingOf(b));
+        return c != 0 ? c : nameA.compareTo(nameB);
+      case 'recent':
+      default:
+        return _addedAt(b).compareTo(_addedAt(a));
+    }
+  }
+
+  /// Tout le catalogue, trié selon la préférence (`MizuConfig.catalogSort`).
   List<Map<String, dynamic>> get _all {
+    final sort = MizuConfig.catalogSort;
     final cached = _sortedCache;
-    if (cached != null) return cached;
+    if (cached != null && _sortedFor == sort) return cached;
     final list = (_items ?? const [])
         .whereType<Map>()
         .map((e) => e.cast<String, dynamic>())
         .toList();
-    list.sort((a, b) => _addedAt(b).compareTo(_addedAt(a)));
+    list.sort((a, b) => _compareBySort(a, b, sort));
     _sortedCache = list;
+    _sortedFor = sort;
     return list;
   }
 
@@ -312,9 +395,34 @@ class _CatalogTabState extends State<_CatalogTab> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.state,
-      builder: (context, _) => _buildCatalog(context),
+      listenable: Listenable.merge([
+        widget.state,
+        MizuConfig.catalogSortListenable,
+      ]),
+      builder: (context, _) => Focus(
+        canRequestFocus: false,
+        onKeyEvent: (node, event) => _onCatalogKey(context, event),
+        child: _buildCatalog(context),
+      ),
     );
+  }
+
+  /// Raccourcis : F = focus recherche, « , » = panneau des préférences.
+  /// Ignorés quand on saisit dans le champ de recherche.
+  KeyEventResult _onCatalogKey(BuildContext context, KeyEvent event) {
+    if (_searchFocus.hasFocus || event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.keyF) {
+      _searchFocus.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.comma) {
+      Scaffold.of(context).openEndDrawer();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   Widget _buildCatalog(BuildContext context) {
@@ -354,16 +462,34 @@ class _CatalogTabState extends State<_CatalogTab> {
             children: [
               Expanded(
                 child: TextField(
-                  decoration: const InputDecoration(
+                  controller: _search,
+                  focusNode: _searchFocus,
+                  decoration: InputDecoration(
                     isDense: true,
-                    prefixIcon: Icon(Icons.search),
+                    prefixIcon: const Icon(Icons.search),
                     hintText: 'Rechercher…',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _filter.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Effacer',
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _search.clear();
+                              setState(() => _filter = '');
+                            },
+                          ),
                   ),
                   onChanged: (v) => setState(() => _filter = v),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: 'Options d\'affichage',
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => Scaffold.of(context).openEndDrawer(),
+              ),
+              const SizedBox(width: 4),
               Text('${visible.length}',
                   style: theme.textTheme.labelMedium
                       ?.copyWith(color: theme.colorScheme.outline)),
@@ -594,10 +720,12 @@ class _CatalogTabState extends State<_CatalogTab> {
   }
 
   Widget _grid(List<dynamic> items) {
-    return GridView.builder(
+    return ValueListenableBuilder<double>(
+      valueListenable: MizuConfig.thumbSizeListenable,
+      builder: (context, thumbSize, _) => GridView.builder(
       padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 150,
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: thumbSize,
         childAspectRatio: 0.55,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
@@ -684,6 +812,107 @@ class _CatalogTabState extends State<_CatalogTab> {
           ),
         );
       },
+      ),
+    );
+  }
+}
+
+/// Choix de tri proposés dans le panneau d'affichage.
+const _sortOptions = <({String value, String label})>[
+  (value: 'recent', label: 'Ajout récent'),
+  (value: 'oldest', label: 'Ajout ancien'),
+  (value: 'name_asc', label: 'Nom A–Z'),
+  (value: 'name_desc', label: 'Nom Z–A'),
+  (value: 'rating_desc', label: 'Note + (meilleure)'),
+  (value: 'rating_asc', label: 'Note - (plus basse)'),
+];
+
+/// Panneau latéral droit (`endDrawer`) : options d'affichage du catalogue.
+class _CatalogSettingsDrawer extends StatelessWidget {
+  const _CatalogSettingsDrawer();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.tune),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Affichage', style: theme.textTheme.titleLarge),
+                ),
+                IconButton(
+                  tooltip: 'Fermer',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            Text('Taille des vignettes', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 2),
+            Text(
+              'Films et séries.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+            ValueListenableBuilder<double>(
+              valueListenable: MizuConfig.thumbSizeListenable,
+              builder: (context, size, _) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Slider(
+                    min: MizuConfig.minThumbSize,
+                    max: MizuConfig.maxThumbSize,
+                    divisions: ((MizuConfig.maxThumbSize -
+                                MizuConfig.minThumbSize) /
+                            10)
+                        .round(),
+                    value: size,
+                    label: '${size.round()} px',
+                    onChanged: (v) => MizuConfig.thumbSize = v,
+                    onChangeEnd: (v) {
+                      MizuConfig.save(thumbSize: v);
+                    },
+                  ),
+                  Text(
+                    '${size.round()} px',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 24),
+            Text('Tri', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            ValueListenableBuilder<String>(
+              valueListenable: MizuConfig.catalogSortListenable,
+              builder: (context, sort, _) => Column(
+                children: [
+                  for (final option in _sortOptions)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(sort == option.value
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked),
+                      title: Text(option.label),
+                      onTap: () {
+                        MizuConfig.catalogSort = option.value;
+                        MizuConfig.save(catalogSort: option.value);
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
