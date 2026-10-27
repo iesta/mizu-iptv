@@ -50,15 +50,11 @@ lancement (ou `xattr -dr com.apple.quarantine "/Applications/Mizu IPTV.app"`).
 
 ## 2. Depuis les sources
 
-> **aarch64 / arm64** : l'AppImage publiée n'existe qu'en x86_64 pour l'instant.
-> Sur une machine ARM, la méthode `curl | sh` s'arrête avec un message clair ;
-> utilise `tools/install-linux.sh` (ci-dessous), qui compile pour l'architecture
-> de la machine. Pour publier un artefact ARM :
->
-> ```bash
-> ./tools/package-appimage.sh
-> gh release upload v0.1.0 dist/Mizu-IPTV-aarch64.AppImage
-> ```
+> **aarch64 / arm64** : pas de build Linux ARM. Flutter ne publie **pas** de SDK
+> Linux arm64 (les archives officielles sont x86_64 uniquement, vérifié sur
+> `releases_linux.json`). Il n'y a donc ni AppImage aarch64 ni support de
+> compilation sur une machine ARM, sauf à utiliser un SDK non officiel
+> (`flutter-elinux`, build depuis les sources).
 
 Installation **utilisateur, sans root** (`~/.local`), avec `tools/install-linux.sh`.
 
@@ -215,15 +211,11 @@ Apple notarization, macOS asks for *right-click → Open* on first launch (or
 
 ## 2. From source
 
-> **aarch64 / arm64**: the published AppImage is x86_64 only for now. On an ARM
-> machine the `curl | sh` route stops with a clear message; use
-> `tools/install-linux.sh` (below), which builds for the host architecture. To
-> publish an ARM artifact:
->
-> ```bash
-> ./tools/package-appimage.sh
-> gh release upload v0.1.0 dist/Mizu-IPTV-aarch64.AppImage
-> ```
+> **aarch64 / arm64**: no Linux ARM build. Flutter does **not** ship a Linux
+> arm64 SDK (official archives are x86_64 only, verified against
+> `releases_linux.json`). So there is no aarch64 AppImage and no compilation on
+> an ARM machine, unless you use an unofficial SDK (`flutter-elinux`, building
+> from source).
 
 **Per-user** installation, no root (`~/.local`), via `tools/install-linux.sh`.
 

@@ -59,9 +59,9 @@ modifiable ensuite dans **Préférences**.
 Lancer : `mizu` ou le menu Applications.
 Désinstallation : `~/.local/share/mizu/uninstall.sh`.
 
-> L'AppImage publiée est **x86_64**. Sur une machine **arm64** (aarch64), le
-> script te le signale et renvoie vers la construction locale — voir
-> [INSTALL.md](INSTALL.md#depuis-les-sources).
+> Les artefacts publiés sont **x86_64** (Linux), **arm64-v8a / armeabi-v7a /
+> x86_64** (Android) et **arm64** (macOS). Il n'y a **pas** de build Linux
+> arm64 : Flutter ne publie pas de SDK Linux arm64 (x86_64 uniquement).
 
 ### Autres méthodes
 
@@ -291,9 +291,9 @@ changed later in **Preferences**.
 Run it: `mizu` or the Applications menu.
 Uninstall: `~/.local/share/mizu/uninstall.sh`.
 
-> The published AppImage is **x86_64**. On an **arm64** (aarch64) machine the
-> script tells you so and points to a local build — see
-> [INSTALL.md](INSTALL.md#from-source).
+> Published artifacts are **x86_64** (Linux), **arm64-v8a / armeabi-v7a /
+> x86_64** (Android) and **arm64** (macOS). There is **no** Linux arm64 build:
+> Flutter does not ship a Linux arm64 SDK (x86_64 only).
 
 ### Other methods
 

@@ -14,9 +14,11 @@
 - [ ] Vérifier que les films lancés ici produisent une ligne `vod` lisible par
       l'app Zen (`serie_progress.runtimeType = 'vod'`) — non confirmé.
 - [x] ~~Releases GitHub~~ → `v0.1.0` publiée (AppImage x86_64 + SHA256SUMS).
-- [ ] **Artefact arm64** : builder l'AppImage aarch64 (machine ARM ou runner
-      `ubuntu-24.04-arm`) et l'attacher à la release.
-- [ ] CI GitHub Actions (matrix linux x86_64 / arm64 / macOS) sur tag.
+- [x] ~~CI GitHub Actions~~ → tag `v*` publie AppImage x86_64, APK par ABI et
+      zip macOS (run `v0.1.1` vert).
+- [x] ~~Artefact arm64~~ → impossible : Flutter ne fournit pas de SDK Linux
+      arm64 (vérifié dans `releases_linux.json`). Pas de build ARM.
+- [ ] Variante `zen` en CI (`-f flavor=zen`) : à valider par un dispatch.
 - [ ] **Notarisation macOS** (compte Apple Developer) si distribution large ;
       sans elle, cask personnel uniquement + clic droit → Ouvrir.
 
