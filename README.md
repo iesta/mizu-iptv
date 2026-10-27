@@ -7,13 +7,11 @@ macOS), écrit en Flutter. Il se **synchronise avec un compte
 [Zen IPTV](https://zeniptv.app/)** : profils, sources, favoris et reprise de
 lecture.
 
-La synchronisation fait partie de l'offre payante **Zen Access** : il faut un
-compte Zen avec cet abonnement (Mizu ne le contourne pas, il le réutilise). Et
-il faut **ton propre abonnement IPTV** — Zen comme Mizu ne fournissent aucun
-contenu.
+La synchronisation dépend de l'offre payante **Zen Access** du compte Zen :
+> Mizu ne la contourne pas, il la réutilise.
 
-> Application de lecture uniquement : elle ne fournit aucun contenu. Utilise
-> ton propre compte et tes propres sources.
+> Application de lecture uniquement : elle ne fournit aucun contenu. Il te faut
+> ton propre abonnement IPTV et ton propre compte [Zen IPTV](https://zeniptv.app/).
 
 <p align="center">
   <img src="docs/mizu-movies.png" alt="Mizu IPTV — catalogue Films (Android TV)" width="920">
@@ -237,12 +235,11 @@ macOS), written in Flutter. It **syncs with a
 [Zen IPTV](https://zeniptv.app/) account**: profiles, sources, favorites and
 resume position.
 
-Synchronization is part of the paid **Zen Access** plan: you need a Zen account
-with that subscription (Mizu does not bypass it, it reuses it). You also need
-**your own IPTV subscription** — neither Zen nor Mizu provides content.
+Synchronization depends on the paid **Zen Access** plan of the Zen account:
+> Mizu does not bypass it, it reuses it.
 
-> Playback only: it provides no content whatsoever. Use your own account and
-> your own sources.
+> Playback only: it provides no content whatsoever. You need your own IPTV
+> subscription and your own [Zen IPTV](https://zeniptv.app/) account.
 
 <p align="center">
   <img src="docs/mizu-movies.png" alt="Mizu IPTV — Movies catalog (Android TV)" width="920">
