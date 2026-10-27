@@ -1,5 +1,7 @@
 # Mizu IPTV (水)
 
+**Français** · [English](#english)
+
 Client IPTV **non officiel** pour Linux (et, à terme, Android / Android TV /
 macOS), écrit en Flutter. Il se **synchronise avec un compte Zen IPTV** :
 profils, sources, favoris et reprise de lecture.
@@ -320,3 +322,325 @@ d'utilisation qui t'engagent l'autorisent dans ton cas.
 ## Licence
 
 MIT — voir [`LICENSE`](LICENSE).
+
+---
+
+# English
+
+**English** · [Français](#mizu-iptv-水)
+
+**Unofficial** IPTV client for Linux (and, in time, Android / Android TV /
+macOS), written in Flutter. It **syncs with a Zen IPTV account**: profiles,
+sources, favorites and resume position.
+
+> Playback only: it provides no content whatsoever. Use your own account and
+> your own sources.
+
+## Status
+
+| Feature | State |
+|---|---|
+| Account sign-in (email / password) | ✅ |
+| Watch profiles + selection | ✅ |
+| Synced sources (Xtream + M3U) | ✅ |
+| Manage sources: add / edit / remove / test | ✅ |
+| Live TV / Movies / Series, category column + search | ✅ |
+| Per-profile favorites (names + posters, add/remove) | ✅ |
+| Resume playback ("Resume SxEy", season and position) | ✅ |
+| libmpv player: audio and subtitle tracks | ✅ |
+| Theme: follows Omarchy when present, default otherwise | ✅ |
+| Remote / keyboard navigation (D-pad) | ✅ sources, catalog, detail, player |
+| Android / Android TV build | ✅ debug APK + TV manifest (Leanback) |
+| macOS build | ✅ builds and launches on an Apple Silicon Mac; video not yet validated |
+
+## Install
+
+No release is published yet: for now you install from source (the commands
+below are complete, copy-paste). Once a release exists, the "release" lines
+become a single `curl`.
+
+### Arch / Omarchy
+
+```bash
+sudo pacman -S --needed base-devel clang cmake ninja pkgconf gtk3 mpv
+yay -S --needed flutter                      # flutter is not in the official repos
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv
+./tools/install-linux.sh
+```
+
+Or as a native package (same result, managed by pacman):
+
+```bash
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv/packaging/arch
+makepkg -si
+```
+
+### Debian / Ubuntu
+
+```bash
+sudo apt update && sudo apt install -y clang cmake ninja-build pkg-config \
+  libgtk-3-dev libmpv-dev curl git unzip xz-utils zip
+git clone --depth 1 -b stable https://github.com/flutter/flutter.git ~/flutter
+export PATH="$HOME/flutter/bin:$PATH"
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv
+./tools/install-linux.sh
+```
+
+### Fedora
+
+```bash
+sudo dnf install -y clang cmake ninja-build pkgconf-pkg-config gtk3-devel \
+  mpv-libs-devel curl git unzip xz zip
+git clone --depth 1 -b stable https://github.com/flutter/flutter.git ~/flutter
+export PATH="$HOME/flutter/bin:$PATH"
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv
+./tools/install-linux.sh
+```
+
+### NixOS
+
+```bash
+git clone https://github.com/iesta/mizu-iptv.git && cd mizu-iptv
+./tools/build.sh linux
+cp -a app/build/linux/x64/release/bundle packaging/nix/bundle
+nix build ./packaging/nix#default            # → result/bin/mizu
+```
+
+*(flake untested; on aarch64 replace `x64` with `arm64`.)*
+
+### AppImage (any distribution, zero dependencies)
+
+```bash
+# once a release is published:
+curl -L -o Mizu-IPTV.AppImage \
+  https://github.com/iesta/mizu-iptv/releases/latest/download/Mizu-IPTV-x86_64.AppImage
+chmod +x Mizu-IPTV.AppImage && ./Mizu-IPTV.AppImage
+```
+
+Until then, build it from source:
+
+```bash
+./tools/package-appimage.sh && ./dist/Mizu-IPTV-x86_64.AppImage
+```
+
+### Flatpak (any distribution)
+
+Once the `.flatpak` is built (on your machine, `flatpak-builder` required):
+
+```bash
+flatpak install --user ./dist/app.mizu.iptv.flatpak && flatpak run app.mizu.iptv
+```
+
+### macOS
+
+```bash
+# once a release and a tap exist:
+brew tap iesta/mizu && brew install --cask iesta/mizu/mizu-iptv
+```
+
+Until then, build on a Mac (see [`AGENTS.md`](AGENTS.md)) then run
+`./tools/package-macos.sh` to produce the zip.
+
+### What `tools/install-linux.sh` does
+
+**Per-user** installation, no root:
+
+| What | Where |
+|---|---|
+| application | `~/.local/opt/mizu/` |
+| terminal launcher | `~/.local/bin/mizu` |
+| menu entry | `~/.local/share/applications/app.mizu.iptv.desktop` |
+| icons | `~/.local/share/icons/hicolor/{256,512}/apps/` |
+
+It then shows up in the Omarchy menu (**Super + Shift + Space** → Apps) and in
+any XDG launcher. Uninstall: `tools/install-linux.sh --uninstall`. Reinstall
+without rebuilding: `--no-build`.
+
+## Building packages
+
+These scripts produce distribution artifacts (not needed to install from
+source).
+
+**AppImage** — portable, ~11 MB, Flutter + libmpv bundled:
+
+```bash
+./tools/package-appimage.sh
+```
+
+**Flatpak** — sandboxed, network + Wayland/X11 + dri permissions:
+
+```bash
+sudo pacman -S flatpak flatpak-builder        # Arch / Omarchy
+flatpak remote-add --if-not-exists --user flathub \
+  https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user flathub org.freedesktop.Platform//24.08 \
+  org.freedesktop.Sdk//24.08
+./tools/package-flatpak.sh --install
+```
+
+**macOS** — on a Mac: `./tools/package-macos.sh` (zip + sha256 for the cask).
+
+### Package status
+
+| Format | Targets | State |
+|---|---|---|
+| **AppImage** | x86_64, aarch64 | ✅ tested on x86_64 (~11 MB) |
+| **Flatpak** | all (Fedora, Debian…) | ⚙️ manifest + script ready, untested (`flatpak-builder` missing here) |
+| **PKGBUILD** (AUR) | Arch, Omarchy | ⚙️ `makepkg --printsrcinfo` OK, build untested |
+| **RPM** | Fedora / RHEL | 📄 skeleton, untested — Fedora recommends Flatpak |
+| **Nix flake** | NixOS | 📄 skeleton, untested |
+| **Homebrew cask** | macOS | 📄 template ready, needs a GitHub release |
+
+## Development
+
+```bash
+./tools/build.sh linux        # embeds .env into the binary
+cd app && flutter run -d linux
+```
+
+`tools/build.sh` passes `--dart-define-from-file=../.env`: the values from
+`.env` are **compiled** into the app, so it is configured from the first launch
+(handy for a distributed APK).
+
+System dependencies (Linux): `clang cmake ninja pkg-config libgtk-3-dev
+libmpv` (media_kit).
+
+## Android / Android TV
+
+```bash
+export ANDROID_HOME=~/dev/tools/android-sdk
+./tools/build.sh apk-debug        # or: apk (release)
+adb install -r app/build/app/outputs/flutter-apk/app-debug.apk
+```
+
+The APK embeds the `.env` configuration: on first launch it goes straight to
+the sign-in screen, without asking for the URL or the key.
+
+The APK is marked `LEANBACK_LAUNCHER` (it appears in the TV launcher), with a
+banner, `touchscreen` not required, and cleartext HTTP allowed (most IPTV
+panels are not behind TLS).
+
+Remote / gamepad:
+
+| Key | Action |
+|---|---|
+| D-pad | move focus (highlighted ring) |
+| OK / Enter / A | open, confirm |
+| Back / Escape | go back |
+| CH+ / CH- (PageUp / PageDown) | switch tab |
+| Long press on a source | edit / delete |
+| Space (player) | play / pause |
+| ← / → (player) | ±10 s |
+| ↑ / ↓ (player) | volume |
+| M (player) | mute |
+
+## Watching
+
+0. **Preferences** tab (gear icon, also reachable before signing in): backend
+   URL, publishable key, TMDB key. Sign-out lives there too.
+1. **Sources** tab → click a card (or the grid icon) to open the catalog.
+2. **Live TV** / **Movies** / **Series**: category column on the left, search at
+   the top, grid or list on the right.
+3. Channel → plays immediately; movie → detail → *Play*; series → detail →
+   season → episode.
+4. The player saves the position into `serie_progress` every 15 s and on close
+   (active profile). ♥ adds to favorites.
+
+## Configuration
+
+**No key is compiled into the application.** On first launch Mizu opens a setup
+screen (水 logo) asking for the Supabase URL and publishable key; they are
+stored in `~/.config/mizu/config.json` (mode 600).
+
+Three other ways, in priority order:
+
+```bash
+# 1. environment variables
+export MIZU_BACKEND_URL=https://my-project.supabase.co
+export MIZU_PUBLISHABLE_KEY=sb_publishable_...
+export MIZU_TMDB_KEY=...            # optional
+
+# 2. .env file (current directory, ~/.config/mizu/, or next to the executable)
+cp .env.example .env && $EDITOR .env
+
+# 3. config.json (written by the preferences screen)
+```
+
+The **Preferences** screen lets you change everything later, test the GoTrue
+connection, and sign out. Changing the URL or the key requires a restart.
+
+`backend_url` / `publishable_key` point at **your own instance** (see
+[`re/supabase/`](re/supabase/)). `tmdb_api_key` (free) improves the detail
+pages of favorites and resume entries; without it, names come from the local
+catalog index.
+
+## Theme
+
+On Omarchy the app reads `~/.local/state/omarchy/current/theme/colors.toml` and
+derives its colors from it (background, cards, accent, errors). It is re-read
+every 8 s: a theme change applies live. Elsewhere, the default theme is used.
+
+## Hosting your own Supabase instance
+
+The client can point at **your** Supabase project instead of Zen's instance —
+useful to stop depending on a third party, or to back up your data.
+
+📘 **[`SUPABASE.md`](SUPABASE.md)** — full description of the Zen backend
+(tables, columns, RPC, RLS) and the reproduction procedure, **in French and
+English**, including the `.env` method and the `zeniptv` example.
+
+In short:
+
+1. **Create a project** on <https://supabase.com> (or self-host).
+2. **SQL Editor** → run [`re/supabase/schema.sql`](re/supabase/schema.sql)
+   (tables, indexes, ownership RLS, `favorites_apply_order` RPC, preferences
+   trigger).
+3. **Authentication** → enable *Email* (Apple/Google possible with your own
+   OAuth credentials).
+4. **Create your user** (client sign-up screen, or *Authentication → Users*).
+5. **Import your data**:
+   ```bash
+   cd re/supabase
+   python3 export-data.py --out seed.sql          # source passwords stripped
+   python3 export-data.py --out seed.sql --with-credentials   # everything, sensitive file
+   ```
+   then run `seed.sql` in the SQL Editor (profile and source UUIDs are
+   preserved, so favorites and progress stay attached).
+6. **Point the client**: enter the URL and publishable key in
+   **Preferences**, in `.env` (before building), or via
+   `MIZU_BACKEND_URL` / `MIZU_PUBLISHABLE_KEY`.
+
+What it does not do: the official Zen app keeps its URL and key compiled in,
+so it cannot be redirected. This instance serves **Mizu** (and backs up your
+data).
+
+## Technical documentation
+
+- [`SUPABASE.md`](SUPABASE.md) — Zen backend structure and reproduction (FR/EN).
+- [`re/PROTOCOL.md`](re/PROTOCOL.md) — observed sync protocol (tables, columns,
+  RPC, limits).
+- [`re/supabase/`](re/supabase/) — schema reconstruction, data export, self-host
+  procedure.
+
+## Layout
+
+```
+app/                 Flutter client
+  lib/data/          Supabase, Xtream, M3U, TMDB index
+  lib/state/         session, profiles, sync
+  lib/ui/            screens (login, sources, catalog, detail, player)
+  lib/theme/         Omarchy palette / default theme
+re/                  reverse engineering and protocol documentation
+```
+
+## Disclaimer
+
+Interoperability project: it lets you use **your** account and **your** sources
+on an unsupported platform. It bypasses no purchase, provides no content, and
+redistributes nothing from the original application. Reverse engineering was
+done by observation (binary strings, public API, our own account data). Check
+that the law and the terms you are bound by allow it in your case.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
