@@ -189,8 +189,13 @@ un changement de thème s'applique à chaud. Ailleurs, thème par défaut.
 
 Le client peut pointer vers **ton** projet Supabase au lieu de l'instance de
 Zen — utile pour ne plus dépendre d'un service tiers, ou pour sauvegarder tes
-données. Tout est détaillé dans [`re/supabase/README.md`](re/supabase/README.md),
-en résumé :
+données.
+
+📘 **[`SUPABASE.md`](SUPABASE.md)** — structure complète du backend Zen
+(tables, colonnes, RPC, RLS) et procédure de reproduction, **en français et en
+anglais**, avec la méthode `.env` et l'exemple `zeniptv`.
+
+En résumé :
 
 1. **Créer un projet** sur <https://supabase.com> (ou self-host).
 2. **SQL Editor** → exécuter [`re/supabase/schema.sql`](re/supabase/schema.sql)

@@ -6,8 +6,9 @@ d'interopérabilité, licence MIT, aucune ressource de l'app d'origine n'est
 embarquée.
 
 Lire d'abord : [`README.md`](README.md) (usage), [`TODO.md`](TODO.md) (état des
-tâches et pistes mises de côté), [`re/PROTOCOL.md`](re/PROTOCOL.md) (protocole
-observé), [`re/supabase/`](re/supabase/) (schéma + export).
+tâches et pistes mises de côté), [`SUPABASE.md`](SUPABASE.md) (backend Zen :
+structure et reproduction, FR/EN), [`re/PROTOCOL.md`](re/PROTOCOL.md)
+(protocole observé), [`re/supabase/`](re/supabase/) (schéma + export).
 
 ## État par plateforme
 
