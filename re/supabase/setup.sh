@@ -45,6 +45,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Validation précoce de la ref (avant tout appel réseau)
+if [[ -n "$PROJECT_REF" ]] && [[ ! "$PROJECT_REF" =~ ^[a-z0-9]{20}$ ]]; then
+  echo "ref invalide : '$PROJECT_REF' (20 caractères, ex. abcdefghijklmnopqrst)" >&2
+  exit 1
+fi
+
 # --- CLI Supabase ----------------------------------------------------------
 if command -v supabase >/dev/null 2>&1; then
   SUPA=(supabase)
@@ -110,11 +116,6 @@ PYLIST
   printf '\nRef du projet (ou Entrée pour annuler) : '
   read -r PROJECT_REF || PROJECT_REF=""
   [[ -n "$PROJECT_REF" ]] || { echo "annulé."; exit 0; }
-fi
-
-if [[ ! "$PROJECT_REF" =~ ^[a-z0-9]{20}$ ]]; then
-  echo "ref invalide : '$PROJECT_REF' (20 caractères, ex. abcdefghijklmnopqrst)" >&2
-  exit 1
 fi
 
 # --- Migration depuis schema.sql ------------------------------------------

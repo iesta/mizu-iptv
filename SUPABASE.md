@@ -171,10 +171,33 @@ requêtes non authentifiées renvoient `[]`, pas d'erreur). Les politiques de
 
 ### 3.2 Créer le schéma
 
-Dans le **SQL Editor**, exécuter [`re/supabase/schema.sql`](re/supabase/schema.sql).
-Il crée les 7 tables, les index, les politiques RLS, la fonction
-`favorites_apply_order` et un trigger qui initialise `user_preferences` à
-l'inscription.
+Deux méthodes, au choix.
+
+**CLI Supabase (recommandé)** — le script fait tout : connexion, migration
+générée depuis `schema.sql`, `supabase db push`.
+
+```bash
+# une fois : authentification (Personal Access Token ou navigateur)
+supabase login            # ou : export SUPABASE_ACCESS_TOKEN=sbp_…
+
+# puis, depuis le dépôt
+re/supabase/setup.sh --project-ref abcdefghijklmnopqrst
+# options : --password '…'  (mot de passe de la base)
+#           --seed          (importe tes données ensuite)
+#           --dry-run       (montre la migration sans l'appliquer)
+#           --db-url '…'    (connexion directe au lieu du project-ref)
+```
+
+Le script utilise la CLI installée, sinon `npx supabase`. Il génère
+`re/supabase/cli/supabase/migrations/<horodatage>_zen_init.sql` à partir de
+[`schema.sql`](re/supabase/schema.sql) — source unique, donc pas de dérive.
+
+**SQL Editor** — coller le contenu de
+[`re/supabase/schema.sql`](re/supabase/schema.sql) puis exécuter.
+
+Dans les deux cas, le schéma créé comprend : les 7 tables, les index, les
+politiques RLS, la fonction `favorites_apply_order` et un trigger qui initialise
+`user_preferences` à l'inscription. Il est **idempotent** : on peut le rejouer.
 
 ### 3.3 Authentification
 
@@ -383,7 +406,25 @@ and Storage buckets are reconstructed or unknown.
 
 1. Create a project on <https://supabase.com> (or self-host). Note the project
    **URL** and **publishable key** (*Project Settings → API*).
-2. Run [`re/supabase/schema.sql`](re/supabase/schema.sql) in the **SQL Editor**.
+2. Create the schema, either way:
+
+   **Supabase CLI (recommended)**
+
+   ```bash
+   supabase login          # or: export SUPABASE_ACCESS_TOKEN=sbp_…
+   re/supabase/setup.sh --project-ref abcdefghijklmnopqrst
+   # options: --password '…' (database password), --seed (import your data),
+   #          --dry-run (show the migration), --db-url '…' (direct connection)
+   ```
+
+   The script uses the installed CLI, otherwise `npx supabase`. It generates a
+   migration from [`schema.sql`](re/supabase/schema.sql) (single source, no
+   drift), then runs `supabase db push`.
+
+   **SQL Editor** — paste [`re/supabase/schema.sql`](re/supabase/schema.sql)
+   and run it.
+
+   The schema is **idempotent**: it can be replayed.
 3. *Authentication → Providers*: enable **Email** (Apple/Google with **your**
    OAuth credentials).
 4. Create your user (Mizu's sign-up screen, or *Authentication → Users*).
