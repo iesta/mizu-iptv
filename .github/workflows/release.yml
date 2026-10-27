@@ -1,0 +1,132 @@
+name: release
+
+# Publie les artefacts sur une release GitHub quand un tag v* est poussé.
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# Jobs :
+#   linux   x86_64 (ubuntu-latest) + aarch64 (ubuntu-24.04-arm) → AppImage
+#   android → APK release par ABI
+#   macos   → .app zippé (zip prêt pour le cask Homebrew)
+#
+# Aucun secret n'est requis dans le dépôt : le build se fait sans `.env`, donc
+# l'application demande sa configuration au premier lancement.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: ubuntu-latest
+            arch: x86_64
+          - runs-on: ubuntu-24.04-arm
+            arch: aarch64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Dépendances système
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev \
+            libfuse2t64 || sudo apt-get install -y libfuse2
+
+      - name: AppImage
+        run: ./tools/package-appimage.sh
+
+      - name: Sommes de contrôle
+        run: |
+          cd dist
+          sha256sum Mizu-IPTV-*.AppImage > SHA256SUMS-${{ matrix.arch }}
+          cat SHA256SUMS-${{ matrix.arch }}
+
+      - name: Publication
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Mizu-IPTV-*.AppImage
+            dist/SHA256SUMS-${{ matrix.arch }}
+          fail_on_unmatched_files: true
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build APK (par ABI)
+        run: |
+          cd app
+          flutter pub get
+          flutter build apk --release --split-per-abi
+
+      - name: Renommer
+        run: |
+          mkdir -p dist
+          V="${GITHUB_REF_NAME}"
+          for f in app/build/app/outputs/flutter-apk/app-*-release.apk; do
+            abi="$(basename "$f" | sed 's/^app-//; s/-release\.apk$//')"
+            cp "$f" "dist/Mizu-IPTV-${V}-${abi}.apk"
+          done
+          ls -lh dist
+
+      - name: Publication
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Mizu-IPTV-*.apk
+          fail_on_unmatched_files: true
+
+  macos:
+    name: macOS arm64
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build + archive
+        run: |
+          ./tools/package-macos.sh
+          ls -lh dist
+
+      - name: Publication
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Mizu-IPTV-*.zip
+          fail_on_unmatched_files: true
