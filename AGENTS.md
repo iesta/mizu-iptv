@@ -5,10 +5,12 @@ synchronise avec un compte **Zen IPTV** (backend Supabase). Projet
 d'interopérabilité, licence MIT, aucune ressource de l'app d'origine n'est
 embarquée.
 
-Lire d'abord : [`README.md`](README.md) (usage), [`TODO.md`](TODO.md) (état des
-tâches et pistes mises de côté), [`SUPABASE.md`](SUPABASE.md) (backend Zen :
-structure et reproduction, FR/EN), [`re/PROTOCOL.md`](re/PROTOCOL.md)
-(protocole observé), [`re/supabase/`](re/supabase/) (schéma + export).
+Lire d'abord : [`README.md`](README.md) (usage, install en une ligne),
+[`INSTALL.md`](INSTALL.md) (paquets et build depuis les sources, FR/EN),
+[`TODO.md`](TODO.md) (état des tâches et pistes écartées),
+[`SUPABASE.md`](SUPABASE.md) (backend Zen : structure et reproduction, FR/EN),
+[`re/PROTOCOL.md`](re/PROTOCOL.md) (protocole observé),
+[`re/supabase/`](re/supabase/) (schéma + export).
 
 ## État par plateforme
 
