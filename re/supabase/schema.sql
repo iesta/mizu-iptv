@@ -5,8 +5,12 @@
 -- (lecture de lignes + sondage PostgREST). Les contraintes marquées « supposé »
 -- sont des hypothèses cohérentes avec le comportement de l'app.
 --
--- À exécuter sur TON projet Supabase (SQL Editor), puis créer ton utilisateur
--- et éventuellement importer tes données (voir export-data.py).
+-- À exécuter sur TON projet Supabase :
+--   * SQL Editor (copier/coller), ou
+--   * `supabase db push` via re/supabase/setup.sh (migrations)
+--
+-- Le script est idempotent : il peut être rejoué (drop policy if exists,
+-- create or replace, create ... if not exists).
 
 create extension if not exists "pgcrypto";
 
@@ -118,21 +122,25 @@ alter table public.masked_categories   enable row level security;
 alter table public.tmdb_mappings       enable row level security;
 
 -- Profils
+drop policy if exists "profils: proprietaire" on public.watch_profiles;
 create policy "profils: proprietaire" on public.watch_profiles
   for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Préférences
+drop policy if exists "prefs: proprietaire" on public.user_preferences;
 create policy "prefs: proprietaire" on public.user_preferences
   for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Sources
+drop policy if exists "sources: proprietaire" on public.playlist_sources;
 create policy "sources: proprietaire" on public.playlist_sources
   for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Favoris / progression / catégories masquées : via le profil
+drop policy if exists "favoris: via profil" on public.favorites;
 create policy "favoris: via profil" on public.favorites
   for all to authenticated
   using (exists (select 1 from public.watch_profiles p
@@ -140,6 +148,7 @@ create policy "favoris: via profil" on public.favorites
   with check (exists (select 1 from public.watch_profiles p
                  where p.id = favorites.watch_profile_id and p.user_id = auth.uid()));
 
+drop policy if exists "progression: via profil" on public.serie_progress;
 create policy "progression: via profil" on public.serie_progress
   for all to authenticated
   using (exists (select 1 from public.watch_profiles p
@@ -147,6 +156,7 @@ create policy "progression: via profil" on public.serie_progress
   with check (exists (select 1 from public.watch_profiles p
                  where p.id = serie_progress.watch_profile_id and p.user_id = auth.uid()));
 
+drop policy if exists "categories masquees: via profil" on public.masked_categories;
 create policy "categories masquees: via profil" on public.masked_categories
   for all to authenticated
   using (exists (select 1 from public.watch_profiles p
@@ -155,6 +165,7 @@ create policy "categories masquees: via profil" on public.masked_categories
                  where p.id = masked_categories.watch_profile_id and p.user_id = auth.uid()));
 
 -- Remappages : via la source
+drop policy if exists "tmdb: via source" on public.tmdb_mappings;
 create policy "tmdb: via source" on public.tmdb_mappings
   for all to authenticated
   using (exists (select 1 from public.playlist_sources s

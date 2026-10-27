@@ -9,6 +9,10 @@ profils, sources, favoris et reprise de lecture.
 > Application de lecture uniquement : elle ne fournit aucun contenu. Utilise
 > ton propre compte et tes propres sources.
 
+<p align="center">
+  <img src="docs/mizu-movies.png" alt="Mizu IPTV — catalogue Films (Android TV)" width="920">
+</p>
+
 ## État
 
 | Fonction | État |
@@ -227,6 +231,10 @@ sources, favorites and resume position.
 
 > Playback only: it provides no content whatsoever. Use your own account and
 > your own sources.
+
+<p align="center">
+  <img src="docs/mizu-movies.png" alt="Mizu IPTV — Movies catalog (Android TV)" width="920">
+</p>
 
 ## Status
 
