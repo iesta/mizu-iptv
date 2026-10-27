@@ -109,6 +109,8 @@ class ZenTheme {
       surface: background,
       onSurface: foreground,
       onSurfaceVariant: muted,
+      surfaceContainerLowest: background,
+      surfaceContainerLow: card,
       surfaceContainer: card,
       surfaceContainerHigh: card,
       surfaceContainerHighest:
@@ -148,6 +150,27 @@ class ZenTheme {
         color: card,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      // Panneaux flottants (tri/vignettes, dialogues, feuilles, menus) aux
+      // couleurs Omarchy plutôt qu'aux surfaces dérivées du seed.
+      drawerTheme: DrawerThemeData(
+        backgroundColor: card,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: card,
+        surfaceTintColor: Colors.transparent,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: card,
+        surfaceTintColor: Colors.transparent,
+      ),
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll<Color>(card),
+          surfaceTintColor: const WidgetStatePropertyAll<Color>(
+              Colors.transparent),
+        ),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(mouseCursor: click),

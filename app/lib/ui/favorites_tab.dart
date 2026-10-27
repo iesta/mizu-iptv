@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../data/catalog_index.dart';
+import '../data/m3u_playlist.dart';
 import '../data/metadata_service.dart';
 import '../data/models.dart';
+import '../data/xtream_client.dart';
 import '../mizu_config.dart';
 import '../state/app_state.dart';
 import 'open_content.dart';
+import 'player_page.dart';
 import 'tv_focus.dart';
 
 /// Favoris du profil actif, répartis en trois colonnes : TV, Films, Séries.
@@ -212,9 +215,20 @@ class _FavoriteTile extends StatefulWidget {
 
 class _FavoriteTileState extends State<_FavoriteTile> {
   bool _removing = false;
+  bool _opening = false;
   bool _collapsed = false;
 
   FavoriteItem get f => widget.favorite;
+
+  /// Ouvre une chaîne favorite : cherche son flux dans les sources.
+  Future<void> _openChannelBusy(String name) async {
+    setState(() => _opening = true);
+    try {
+      await _openChannel(context, widget.state, name);
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
 
   /// Retrait en deux temps : le coeur grossit et la carte s'efface, puis la
   /// ligne se replie (les suivantes remontent), enfin la suppression est
@@ -288,10 +302,16 @@ class _FavoriteTileState extends State<_FavoriteTile> {
             final meta = snap.data;
             final title = meta?.title ?? entry?.name ?? item.contentId;
             final poster = meta?.poster ?? entry?.poster;
-            final canOpen = entry != null && entry.candidates.isNotEmpty;
+            final canOpen = isChannel ||
+                (entry != null && entry.candidates.isNotEmpty);
 
             void activate() {
-              if (!canOpen) return;
+              if (_opening) return;
+              if (isChannel) {
+                _openChannelBusy(item.contentId);
+                return;
+              }
+              if (entry == null || entry.candidates.isEmpty) return;
               openContent(context, widget.state,
                   kind: item.contentType, entry: entry);
             }
@@ -370,6 +390,7 @@ class _FavoriteTileState extends State<_FavoriteTile> {
                                     const SizedBox(height: 2),
                                     Text(
                                       [
+                                        if (_opening) 'Recherche…',
                                         if (meta?.year != null)
                                           '${meta!.year}',
                                         if (entry != null &&
@@ -428,6 +449,86 @@ class _FavoriteTileState extends State<_FavoriteTile> {
       curve: Curves.easeInOut,
       alignment: Alignment.topCenter,
       child: _collapsed ? const SizedBox(width: double.infinity) : content,
+    );
+  }
+}
+
+/// Résout une chaîne favorite (stockée par nom dans `favorites.content_id`)
+/// dans les sources du compte, puis lance le premier flux correspondant.
+Future<void> _openChannel(
+  BuildContext context,
+  AppState state,
+  String name,
+) async {
+  final wanted = name.trim().toLowerCase();
+  for (final source in state.sources) {
+    try {
+      if (source.isXtream) {
+        final client = XtreamClient(
+          baseUrl: source.endpoint,
+          username: source.username ?? '',
+          password: source.password ?? '',
+          userAgent: source.raw['user_agent']?.toString(),
+        );
+        try {
+          final streams = await client.liveStreams();
+          for (final raw in streams) {
+            if (raw is! Map) continue;
+            final item = raw.cast<String, dynamic>();
+            final label = (item['name'] ?? '').toString().trim();
+            if (label.toLowerCase() != wanted) continue;
+            final id = int.tryParse(
+              (item['stream_id'] ?? item['id'] ?? '').toString(),
+            );
+            if (id == null) continue;
+            final ext =
+                (item['container_extension']?.toString().isNotEmpty ?? false)
+                    ? item['container_extension'].toString()
+                    : 'ts';
+            if (!context.mounted) return;
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => PlayerPage(
+                state: state,
+                url: client.liveUrl(id, ext: ext),
+                title: label.isEmpty ? name : label,
+                subtitle: 'Direct',
+                contentId: name,
+                contentType: 'channel',
+              ),
+            ));
+            return;
+          }
+        } finally {
+          client.close();
+        }
+      } else {
+        final channels = await loadM3u(
+          source.endpoint,
+          userAgent: source.raw['user_agent']?.toString(),
+        );
+        for (final channel in channels) {
+          if (channel.name.trim().toLowerCase() != wanted) continue;
+          if (!context.mounted) return;
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => PlayerPage(
+              state: state,
+              url: channel.url,
+              title: channel.name,
+              subtitle: channel.group,
+              contentId: name,
+              contentType: 'channel',
+            ),
+          ));
+          return;
+        }
+      }
+    } catch (_) {
+      // Source indisponible ou expirée : on tente la suivante.
+    }
+  }
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Chaîne « $name » introuvable dans tes sources.')),
     );
   }
 }

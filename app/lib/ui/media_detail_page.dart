@@ -1,16 +1,12 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
-import 'package:media_kit/media_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/metadata_service.dart';
 import '../data/models.dart';
 import '../data/xtream_client.dart';
-import '../mizu_config.dart';
 import '../state/app_state.dart';
 import 'player_page.dart';
 
@@ -564,7 +560,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         TextButton.icon(
           style: TextButton.styleFrom(
             iconSize: 30,
-            textStyle: theme.textTheme.titleLarge,
+            textStyle: theme.textTheme.titleLarge?.copyWith(
+              fontSize: (theme.textTheme.titleLarge?.fontSize ?? 22) - 1,
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             minimumSize: const Size(0, 52),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -620,207 +618,8 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
               ),
             ),
           ),
-        _streamInfoButton(theme),
       ],
     );
-  }
-
-  /// Icône « i » : popover avec les infos du flux.
-  Widget _streamInfoButton(ThemeData theme) {
-    final hasStream = _streamUrlForInfo != null;
-    return MenuAnchor(
-      alignmentOffset: const Offset(0, 8),
-      menuChildren: [
-        _StreamInfoPanel(
-          baseRows: _streamInfoRows,
-          extraProbe: hasStream ? _buildStreamInfo : null,
-        ),
-      ],
-      builder: (context, controller, child) => IconButton(
-        tooltip: 'Infos du flux',
-        visualDensity: VisualDensity.compact,
-        icon: const Icon(Icons.info_outline),
-        onPressed: () =>
-            controller.isOpen ? controller.close() : controller.open(),
-      ),
-    );
-  }
-
-  /// Lignes immédiates de la fiche flux (avant le sondage média/HTTP).
-  List<(String, String)> get _streamInfoRows {
-    final host = Uri.tryParse(_client.baseUrl)?.host ?? _client.baseUrl;
-    final rows = <(String, String)>[
-      ('Serveur', host),
-      ('Type', widget.kind == MediaKind.vod ? 'Film' : 'Série'),
-    ];
-    final t = _target;
-    if (widget.kind == MediaKind.serie && t != null) {
-      rows.add(('Épisode', 'S${t.season} E${t.episode}'));
-    }
-    rows.add(('ID flux', '${widget.id}'));
-    rows.add(('Conteneur', _containerExt ?? '—'));
-    final quality = _qualityLabel;
-    if (quality != null) rows.add(('Qualité', quality));
-    final duration = _duration;
-    if (duration != null) rows.add(('Durée', duration));
-    return rows;
-  }
-
-  /// Sondage réel du flux (media_kit + HEAD) pour des infos exactes.
-  Future<List<(String, String)>> _buildStreamInfo() async {
-    final url = _streamUrlForInfo;
-    if (url == null) return const [];
-    final results = await Future.wait<Object?>([
-      _probeMedia(url),
-      _probeSize(),
-    ]);
-    final probe = results[0] as _StreamProbe?;
-    final bytes = results[1] as int?;
-    final rows = <(String, String)>[];
-    if (probe != null) {
-      if (probe.width != null && probe.height != null) {
-        rows.add(('Résolution', '${probe.width}×${probe.height}'));
-      } else if (probe.height != null) {
-        rows.add(('Résolution', '${probe.height}p'));
-      }
-      if (probe.videoCodec != null) rows.add(('Vidéo', probe.videoCodec!));
-      if (probe.fps != null) {
-        rows.add(('Images/s', probe.fps!.toStringAsFixed(2)));
-      }
-      if (probe.audioCodec != null) rows.add(('Audio', probe.audioCodec!));
-      final audioDetails = <String>[
-        if (probe.audioChannels != null) probe.audioChannels!,
-        if (probe.sampleRate != null)
-          '${(probe.sampleRate! / 1000).toStringAsFixed(1)} kHz',
-      ];
-      if (audioDetails.isNotEmpty) {
-        rows.add(('Audio (détails)', audioDetails.join(' · ')));
-      }
-      if (probe.bitrate != null && probe.bitrate! > 0) {
-        rows.add((
-          'Débit (média)',
-          '${(probe.bitrate! / 1000000).toStringAsFixed(2)} Mb/s',
-        ));
-      }
-    }
-    if (bytes != null) {
-      rows.add(('Taille', _fmtBytes(bytes)));
-      final seconds = probe?.durationSeconds ?? _durationSeconds;
-      if (seconds != null && seconds > 0) {
-        rows.add(('Débit moyen', _fmtRate(bytes, seconds)));
-      }
-    }
-    return rows;
-  }
-
-  /// Ouvre brièvement le flux dans un Player muet pour lire codecs/rendu.
-  Future<_StreamProbe?> _probeMedia(String url) async {
-    final player = Player(
-      configuration: const PlayerConfiguration(logLevel: MPVLogLevel.error),
-    );
-    final completer = Completer<_StreamProbe?>();
-    final subs = <StreamSubscription<dynamic>>[];
-    void finish() {
-      if (completer.isCompleted) return;
-      completer.complete(_StreamProbe.fromState(player.state));
-    }
-
-    subs.add(player.stream.tracks.listen((tracks) {
-      if (tracks.video.isNotEmpty || tracks.audio.isNotEmpty) finish();
-    }));
-    final timer = Timer(const Duration(seconds: 8), finish);
-    try {
-      await player
-          .open(
-            Media(url, httpHeaders: {'User-Agent': MizuConfig.userAgent}),
-            play: false,
-          )
-          .timeout(const Duration(seconds: 10));
-    } catch (_) {
-      // On garde ce qui a pu être lu.
-    }
-    _StreamProbe? probe;
-    try {
-      probe = await completer.future.timeout(
-        const Duration(seconds: 9),
-        onTimeout: () => _StreamProbe.fromState(player.state),
-      );
-    } catch (_) {
-      probe = null;
-    }
-    timer.cancel();
-    for (final s in subs) {
-      await s.cancel();
-    }
-    try {
-      await player.dispose();
-    } catch (_) {}
-    return probe;
-  }
-
-  /// URL du flux qui serait lu (film, ou épisode cible d'une série).
-  String? get _streamUrlForInfo {
-    if (widget.kind == MediaKind.vod) {
-      return _client.vodUrl(widget.id, ext: _containerExt ?? 'mp4');
-    }
-    final ep = _targetEpisode;
-    if (ep == null) return null;
-    final id = int.tryParse(ep['id']?.toString() ?? '');
-    if (id == null) return null;
-    final ext = ep['container_extension']?.toString() ?? 'mp4';
-    return _client.seriesUrl(id, ext: ext);
-  }
-
-  Map<String, dynamic>? get _targetEpisode {
-    final t = _target;
-    if (t == null) return null;
-    final list = _episodes['${t.season}'] ?? const [];
-    for (final e in list) {
-      if ((e['episode_num'] as num?)?.toInt() == t.episode) return e;
-    }
-    return list.isNotEmpty ? list.first : null;
-  }
-
-  /// Taille du flux via HEAD (Content-Length ou Content-Range), si exposée.
-  Future<int?> _probeSize() async {
-    final url = _streamUrlForInfo;
-    if (url == null) return null;
-    try {
-      final res = await http
-          .head(Uri.parse(url), headers: {'User-Agent': MizuConfig.userAgent})
-          .timeout(const Duration(seconds: 12));
-      final len = int.tryParse(res.headers['content-length'] ?? '');
-      if (len != null && len > 0) return len;
-      final range = res.headers['content-range'];
-      final total = range?.split('/').last.trim();
-      final parsed = total == null ? null : int.tryParse(total);
-      if (parsed != null && parsed > 0) return parsed;
-    } catch (_) {
-      // Taille indisponible : le panneau masque simplement la ligne.
-    }
-    return null;
-  }
-
-  int? get _durationSeconds {
-    final secs = int.tryParse(_info?['duration_secs']?.toString() ?? '');
-    if (secs != null && secs > 0) return secs;
-    final raw = _info?['duration']?.toString().trim();
-    final hms =
-        raw == null ? null : RegExp(r'^(\d+):(\d{2}):(\d{2})$').firstMatch(raw);
-    if (hms == null) return null;
-    return int.parse(hms.group(1)!) * 3600 +
-        int.parse(hms.group(2)!) * 60 +
-        int.parse(hms.group(3)!);
-  }
-
-  String? get _qualityLabel {
-    final raw = (_info?['quality'] ?? _info?['resolution'])?.toString().trim();
-    if (raw != null && raw.isNotEmpty) return raw;
-    final title = _title.toUpperCase();
-    for (final q in const ['2160P', '4K', 'UHD', '1080P', 'FHD', '720P', 'HD', 'SD']) {
-      if (title.contains(q)) return q == 'FHD' ? 'FHD (1080p)' : q;
-    }
-    return null;
   }
 
   /// Styles du film, découpés en étiquettes.
@@ -853,8 +652,8 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
               colors: [
                 colors.surface.withValues(alpha: backdrop == null ? 1 : 0.99),
                 colors.surface.withValues(alpha: backdrop == null ? 1 : 0.95),
@@ -892,6 +691,24 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
               )
             : null;
 
+    // Reprise possible : proposer aussi « Lecture du début » à côté.
+    final hasResume =
+        widget.kind == MediaKind.vod ? _resume != null : target != null;
+    final playFromStart = hasResume
+        ? OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 60),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              iconSize: 28,
+              textStyle: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            onPressed: () => _playOrResume(fromStart: true),
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Lecture du début'),
+          )
+        : null;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -927,7 +744,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                                   _stars(rating),
                                   const SizedBox(width: 8),
                                   Text(
-                                    '${rating.toStringAsFixed(1)}/5',
+                                    '${rating.toStringAsFixed(1)}/10',
                                     style:
                                         theme.textTheme.titleMedium?.copyWith(
                                       color: colors.onSurface
@@ -978,10 +795,19 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
             ],
           ),
         ),
-        if (play != null)
+        if (play != null || playFromStart != null)
           Padding(
             padding: const EdgeInsets.only(left: 24, right: 4),
-            child: _HoverLift(child: play),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (play != null) _HoverLift(child: play),
+                if (playFromStart != null) _HoverLift(child: playFromStart),
+              ],
+            ),
           ),
       ],
     );
@@ -1040,7 +866,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 minimumSize: const Size(0, 34),
-                textStyle: theme.textTheme.bodyMedium,
+                textStyle: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: (theme.textTheme.bodyMedium?.fontSize ?? 14) + 1,
+                ),
               ),
               onPressed: _openTrailer,
               child: Row(
@@ -1094,8 +922,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         child: Text(_cert!, style: theme.textTheme.labelMedium),
       );
 
-  /// Cinq étoiles jaunes remplies à la fraction de la note (0..5).
-  Widget _stars(double rating) {
+  /// Cinq étoiles remplies selon la note sur 10 (chaque étoile = 2 points).
+  Widget _stars(double rating10) {
+    final stars = rating10 / 2;
     const amber = Color(0xFFFFC107);
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1111,7 +940,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                 ClipRect(
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    widthFactor: (rating - i).clamp(0.0, 1.0),
+                    widthFactor: (stars - i).clamp(0.0, 1.0),
                     child: const Icon(Icons.star_rounded,
                         size: 24, color: amber),
                   ),
@@ -1133,12 +962,22 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         : MetadataService.posterUrl(raw, size: 'w1280');
   }
 
-  /// Note sur 5 : `rating` Xtream (souvent /10) sinon vote TMDB.
+  /// Note sur 10 : `rating_5based`/`rating` Xtream, sinon vote TMDB (/10).
   double? get _rating {
-    var raw = double.tryParse(_info?['rating']?.toString() ?? '');
-    raw ??= _vote;
+    final five = double.tryParse(_info?['rating_5based']?.toString() ?? '');
+    double? raw;
+    if (five != null && five > 0) {
+      raw = five * 2;
+    } else {
+      final xtream = double.tryParse(_info?['rating']?.toString() ?? '');
+      if (xtream != null && xtream > 0) {
+        raw = xtream > 5 ? xtream : xtream * 2;
+      } else {
+        raw = _vote; // TMDB, déjà sur 10
+      }
+    }
     if (raw == null || raw <= 0) return null;
-    return (raw > 5 ? raw / 2 : raw).clamp(0.0, 5.0);
+    return raw.clamp(0.0, 10.0);
   }
 
   String? get _year {
@@ -1491,165 +1330,3 @@ class _HoverLiftState extends State<_HoverLift> {
   }
 }
 
-/// Panneau « infos du flux » affiché en popover, avec sondage média + taille.
-class _StreamInfoPanel extends StatefulWidget {
-  const _StreamInfoPanel({required this.baseRows, this.extraProbe});
-
-  final List<(String, String)> baseRows;
-  final Future<List<(String, String)>> Function()? extraProbe;
-
-  @override
-  State<_StreamInfoPanel> createState() => _StreamInfoPanelState();
-}
-
-class _StreamInfoPanelState extends State<_StreamInfoPanel> {
-  List<(String, String)>? _extra;
-  bool _loading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _probe();
-  }
-
-  Future<void> _probe() async {
-    final probe = widget.extraProbe;
-    if (probe == null) return;
-    setState(() => _loading = true);
-    List<(String, String)> extra = const [];
-    try {
-      extra = await probe();
-    } catch (_) {
-      // Sondage partiel : on affiche au moins les lignes de base.
-    }
-    if (!mounted) return;
-    setState(() {
-      _extra = extra;
-      _loading = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final rows = <(String, String)>[
-      ...widget.baseRows,
-      ...?_extra,
-    ];
-    return SizedBox(
-      width: 460,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.info_outline,
-                    size: 22, color: theme.colorScheme.primary),
-                const SizedBox(width: 10),
-                Text('Infos du flux', style: theme.textTheme.titleLarge),
-              ],
-            ),
-            const SizedBox(height: 14),
-            for (final row in rows) _infoRow(theme, row.$1, row.$2),
-            if (_loading) ...[
-              const SizedBox(height: 14),
-              const LinearProgressIndicator(minHeight: 2),
-              const SizedBox(height: 6),
-              Text(
-                'Analyse du flux…',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _infoRow(ThemeData theme, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 150,
-            child: Text(
-              label,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.outline),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Résultat du sondage media_kit : codecs, résolution, débit…
-class _StreamProbe {
-  const _StreamProbe({
-    this.width,
-    this.height,
-    this.videoCodec,
-    this.fps,
-    this.audioCodec,
-    this.audioChannels,
-    this.sampleRate,
-    this.bitrate,
-    this.durationSeconds,
-  });
-
-  final int? width;
-  final int? height;
-  final String? videoCodec;
-  final double? fps;
-  final String? audioCodec;
-  final String? audioChannels;
-  final int? sampleRate;
-  final int? bitrate;
-  final int? durationSeconds;
-
-  factory _StreamProbe.fromState(PlayerState state) {
-    final video =
-        state.tracks.video.isNotEmpty ? state.tracks.video.first : null;
-    final audio =
-        state.tracks.audio.isNotEmpty ? state.tracks.audio.first : null;
-    final params = state.videoParams;
-    final duration = state.duration;
-    return _StreamProbe(
-      width: video?.w ?? params.w,
-      height: video?.h ?? params.h,
-      videoCodec: video?.codec,
-      fps: video?.fps,
-      audioCodec: audio?.codec,
-      audioChannels: audio?.channels ?? audio?.channelscount?.toString(),
-      sampleRate: audio?.samplerate,
-      bitrate: video?.bitrate ?? audio?.bitrate,
-      durationSeconds: duration.inSeconds > 0 ? duration.inSeconds : null,
-    );
-  }
-}
-
-String _fmtBytes(int bytes) {
-  if (bytes >= 1 << 30) return '${(bytes / (1 << 30)).toStringAsFixed(2)} Go';
-  if (bytes >= 1 << 20) return '${(bytes / (1 << 20)).toStringAsFixed(1)} Mo';
-  return '${(bytes / 1024).toStringAsFixed(0)} Ko';
-}
-
-String _fmtRate(int bytes, int seconds) {
-  final moPerSec = bytes / seconds / (1 << 20);
-  final mbps = bytes * 8 / seconds / 1000000;
-  return '${moPerSec.toStringAsFixed(2)} Mo/s (${mbps.toStringAsFixed(1)} Mb/s)';
-}

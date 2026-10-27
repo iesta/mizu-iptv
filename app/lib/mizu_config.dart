@@ -56,7 +56,7 @@ class MizuConfig {
   /// Taille max des vignettes du catalogue (films/séries), en pixels.
   static const double defaultThumbSize = 150;
   static const double minThumbSize = 100;
-  static const double maxThumbSize = 260;
+  static const double maxThumbSize = 400;
 
   static final ValueNotifier<double> _thumbSizeNotifier =
       ValueNotifier<double>(defaultThumbSize);

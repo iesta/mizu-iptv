@@ -246,14 +246,14 @@ class _CatalogTabState extends State<_CatalogTab> {
     return 0;
   }
 
-  /// Note normalisée sur 5 (0 si absente), à partir de `rating_5based` ou
+  /// Note normalisée sur 10 (0 si absente), à partir de `rating_5based` ou
   /// `rating` (souvent sur 10 chez Xtream).
   static double _ratingOf(Map<String, dynamic> item) {
     final five = double.tryParse(item['rating_5based']?.toString() ?? '');
-    if (five != null && five > 0) return five.clamp(0.0, 5.0);
+    if (five != null && five > 0) return (five * 2).clamp(0.0, 10.0);
     final raw = double.tryParse(item['rating']?.toString() ?? '');
     if (raw == null || raw <= 0) return 0;
-    return (raw > 5 ? raw / 2 : raw).clamp(0.0, 5.0);
+    return (raw > 5 ? raw : raw * 2).clamp(0.0, 10.0);
   }
 
   int _compareBySort(
@@ -736,6 +736,7 @@ class _CatalogTabState extends State<_CatalogTab> {
         final icon = _icon(item);
         final tmdb = _tmdbOf(item);
         final fav = tmdb != null && widget.state.isFavorite(tmdb, _favoriteType);
+        final rating = _ratingOf(item);
         return TvFocus(
           autofocus: i == 0,
           onActivate: () => _open(item),
@@ -772,6 +773,35 @@ class _CatalogTabState extends State<_CatalogTab> {
                               ),
                             ),
                     ),
+                    if (rating > 0)
+                      Positioned(
+                        top: 4,
+                        left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star_rounded,
+                                  size: 17, color: Color(0xFFFFC107)),
+                              const SizedBox(width: 3),
+                              Text(
+                                rating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     if (tmdb != null)
                       Positioned(
                         top: 4,

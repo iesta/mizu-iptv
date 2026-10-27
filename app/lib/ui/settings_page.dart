@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/metadata_service.dart';
 import '../mizu_config.dart';
@@ -41,6 +42,9 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _testResult;
   bool _testOk = false;
   String? _error;
+
+  /// Onglet actif de la page Préférences.
+  _SettingsTab _tab = _SettingsTab.preferences;
 
   @override
   void initState() {
@@ -315,6 +319,382 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Premier lancement : formulaire unique de configuration.
+    if (widget.firstRun) return _legacyBuild(context);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Préférences')),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 760;
+          if (wide) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _leftNav(theme),
+                const VerticalDivider(width: 1),
+                Expanded(child: _tabContent(theme)),
+              ],
+            );
+          }
+          return Column(
+            children: [
+              _topNav(theme),
+              const Divider(height: 1),
+              Expanded(child: _tabContent(theme)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Navigation verticale (onglets à gauche).
+  // ---------------------------------------------------------------------------
+
+  Widget _leftNav(ThemeData theme) {
+    return Container(
+      width: 280,
+      color: theme.colorScheme.surfaceContainer,
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
+              child: Text('Préférences', style: theme.textTheme.titleLarge),
+            ),
+            for (final tab in _SettingsTab.values)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: ListTile(
+                  selected: _tab == tab,
+                  selectedColor: theme.colorScheme.primary,
+                  selectedTileColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  leading: Icon(_tabIcon(tab)),
+                  title: Text(_tabLabel(tab)),
+                  onTap: () => setState(() => _tab = tab),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _topNav(ThemeData theme) {
+    return SizedBox(
+      height: 60,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        children: [
+          for (final tab in _SettingsTab.values)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                avatar: Icon(_tabIcon(tab), size: 18),
+                label: Text(_tabLabel(tab)),
+                selected: _tab == tab,
+                onSelected: (_) => setState(() => _tab = tab),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabContent(ThemeData theme) {
+    switch (_tab) {
+      case _SettingsTab.preferences:
+        return _preferencesContent(theme);
+      case _SettingsTab.account:
+        return _accountContent(theme);
+      case _SettingsTab.server:
+        return _serverContent(theme);
+      case _SettingsTab.metadata:
+        return _metadataContent(theme);
+    }
+  }
+
+  String _tabLabel(_SettingsTab tab) => switch (tab) {
+        _SettingsTab.preferences => 'Préférences',
+        _SettingsTab.account => 'Compte',
+        _SettingsTab.server => 'Synchro',
+        _SettingsTab.metadata => 'Métadonnées',
+      };
+
+  IconData _tabIcon(_SettingsTab tab) => switch (tab) {
+        _SettingsTab.preferences => Icons.tune,
+        _SettingsTab.account => Icons.person_outline,
+        _SettingsTab.server => Icons.dns_outlined,
+        _SettingsTab.metadata => Icons.movie_filter_outlined,
+      };
+
+  // ---------------------------------------------------------------------------
+  // Contenu des onglets.
+  // ---------------------------------------------------------------------------
+
+  Widget _preferencesContent(ThemeData theme) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Text('Préférences', style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 6),
+        Text(
+          'Réglages d\'affichage et de navigation.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 20),
+        _sectionOrderEditor(theme),
+        const SizedBox(height: 16),
+        Text(
+          'D\'autres préférences seront ajoutées ici.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+      ],
+    );
+  }
+
+  Widget _accountContent(ThemeData theme) {
+    final user = widget.state?.session?.user;
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Text('Compte', style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 16),
+        if (user != null) ...[
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.person_outline),
+            title: Text(user.email ?? 'Compte connecté'),
+            subtitle: Text(MizuConfig.backendUrl.isEmpty
+                ? 'Backend non configuré'
+                : MizuConfig.backendUrl),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _signOut,
+            icon: const Icon(Icons.logout),
+            label: const Text('Se déconnecter'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: theme.colorScheme.error,
+            ),
+          ),
+        ] else
+          Text('Aucun compte connecté.', style: theme.textTheme.bodyMedium),
+      ],
+    );
+  }
+
+  Widget _serverContent(ThemeData theme) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Text('Synchro', style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 6),
+        Text(
+          'Synchronise ton compte Zen IPTV : profils, sources, favoris et '
+          'reprise de lecture. Mizu se connecte à l\'instance Supabase de Zen '
+          '(ou à la tienne, voir re/supabase/). La synchronisation nécessite '
+          'l\'offre Zen Access.',
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _openUrl('https://zeniptv.app/'),
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: const Text('Créer un compte Zen IPTV'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ..._serverFields(theme),
+        const SizedBox(height: 24),
+        _saveButton(),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+        ],
+        const SizedBox(height: 24),
+        Text(
+          'Backend : ${MizuConfig.backendUrl.isEmpty ? "non configuré" : MizuConfig.backendUrl}'
+          '${MizuConfig.source.isEmpty ? "" : " (${MizuConfig.source})"}',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+      ],
+    );
+  }
+
+  /// Ouvre un lien externe (navigateur / app).
+  Future<void> _openUrl(String url) async {
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Aucun navigateur disponible : on ignore.
+    }
+  }
+
+  Widget _metadataContent(ThemeData theme) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Text('Métadonnées', style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 6),
+        Text(
+          'Clé TMDB (gratuite) pour les titres et affiches des favoris et de '
+          'la reprise. Sans elle, les noms viennent de l\'index du catalogue.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _tmdb,
+          decoration: const InputDecoration(
+            labelText: 'Clé API TMDB (optionnel)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _clearing ? null : _clearCache,
+              icon: _clearing
+                  ? const SizedBox(
+                      height: 14,
+                      width: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.cleaning_services_outlined),
+              label: const Text('Vider le cache'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '${_cacheCount ?? 0} fiche(s) en cache · conservées 30 jours',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.outline),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Ce produit utilise l\'API TMDB mais n\'est ni approuvé ni certifié '
+          'par TMDB.',
+          style: theme.textTheme.labelSmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 24),
+        _saveButton(),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+        ],
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Éléments partagés.
+  // ---------------------------------------------------------------------------
+
+  List<Widget> _serverFields(ThemeData theme) {
+    return [
+      TextField(
+        controller: _url,
+        decoration: const InputDecoration(
+          labelText: 'URL du backend',
+          hintText: 'https://mon-projet.supabase.co',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _key,
+        decoration: const InputDecoration(
+          labelText: 'Clé publishable',
+          hintText: 'sb_publishable_…',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _ua,
+        decoration: const InputDecoration(
+          labelText: 'User-Agent des requêtes',
+          hintText: MizuConfig.defaultUserAgent,
+          helperText: 'Certains panneaux filtrent les User-Agent inconnus. '
+              'Laisser vide pour la valeur par défaut.',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          OutlinedButton.icon(
+            onPressed: _testing ? null : _test,
+            icon: _testing
+                ? const SizedBox(
+                    height: 14,
+                    width: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.network_check),
+            label: const Text('Tester'),
+          ),
+          const SizedBox(width: 12),
+          if (_testResult != null)
+            Expanded(
+              child: Row(
+                children: [
+                  Icon(
+                    _testOk ? Icons.check_circle_outline : Icons.error_outline,
+                    size: 16,
+                    color: _testOk
+                        ? Colors.greenAccent
+                        : theme.colorScheme.error,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(_testResult!,
+                        style: theme.textTheme.bodySmall),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    ];
+  }
+
+  Widget _saveButton() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FilledButton.icon(
+        onPressed: _saving ? null : _save,
+        icon: _saving
+            ? const SizedBox(
+                height: 16,
+                width: 16,
+                child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.save_outlined),
+        label: const Text('Enregistrer'),
+      ),
+    );
+  }
+
+  // Ancienne présentation en une page, conservée pour le premier lancement.
+  Widget _legacyBuild(BuildContext context) {
+    final theme = Theme.of(context);
     final user = widget.state?.session?.user;
 
     return Scaffold(
@@ -524,3 +904,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 }
+
+/// Onglets de la page Préférences (ordre d'affichage).
+enum _SettingsTab { preferences, account, server, metadata }

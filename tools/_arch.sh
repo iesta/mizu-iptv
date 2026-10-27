@@ -19,8 +19,13 @@ case "$(uname -m)" in
 esac
 
 # Vérifie que Flutter est utilisable pour compiler (message utile sinon).
+# $1 = cible (linux, apk, apk-debug, macos…). Le blocage « pas de SDK Linux
+# arm64 » ne concerne que la cible Linux desktop : un APK Android se compile
+# sans problème depuis un hôte arm64.
 require_flutter() {
-  if [ "$(uname -s)" = "Linux" ] && [ "$FLUTTER_ARCH_DIR" = "arm64" ]; then
+  local target="${1:-linux}"
+  if [ "$(uname -s)" = "Linux" ] && [ "$FLUTTER_ARCH_DIR" = "arm64" ] &&
+     [ "$target" = "linux" ]; then
     cat >&2 <<'MSG'
 Linux arm64 : Flutter ne publie pas de SDK Linux arm64 (x86_64 uniquement).
 Un build local est donc impossible avec le SDK officiel — voir INSTALL.md,

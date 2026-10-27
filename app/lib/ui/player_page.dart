@@ -65,6 +65,7 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _controlsVisible = true;
   Timer? _hideTimer;
   String? _osdText;
+  String? _osdSubText;
   Timer? _osdTimer;
   // Accumulation des sauts rapprochés (ex. 3 × +10 s → +30 s).
   int _pendingJump = 0;
@@ -204,12 +205,20 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
-  /// OSD éphémère au centre (« +10 s », « -1m »…).
-  void _showOsd(String text) {
+  /// OSD éphémère (« +10 s », « -1m »…), avec le temps courant en dessous.
+  void _showOsd(String text, {String? subtitle}) {
     _osdTimer?.cancel();
-    setState(() => _osdText = text);
+    setState(() {
+      _osdText = text;
+      _osdSubText = subtitle;
+    });
     _osdTimer = Timer(const Duration(milliseconds: 900), () {
-      if (mounted) setState(() => _osdText = null);
+      if (mounted) {
+        setState(() {
+          _osdText = null;
+          _osdSubText = null;
+        });
+      }
     });
   }
 
@@ -237,7 +246,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _pendingTarget = target;
     _pendingJump += seconds;
     _player.seek(target);
-    _showOsd(_fmtJump(_pendingJump));
+    _showOsd(_fmtJump(_pendingJump), subtitle: _fmt(target));
     _seekAccumTimer?.cancel();
     _seekAccumTimer = Timer(_seekAccumDelay, () {
       _pendingJump = 0;
@@ -467,13 +476,27 @@ class _PlayerPageState extends State<PlayerPage> {
                       color: Colors.black.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(26),
                     ),
-                    child: Text(
-                      _osdText ?? '',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _osdText ?? '',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (_osdSubText != null)
+                          Text(
+                            _osdSubText!,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
