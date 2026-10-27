@@ -3,8 +3,14 @@
 **Français** · [English](#english)
 
 Client IPTV **non officiel** pour Linux (et, à terme, Android / Android TV /
-macOS), écrit en Flutter. Il se **synchronise avec un compte Zen IPTV** :
-profils, sources, favoris et reprise de lecture.
+macOS), écrit en Flutter. Il se **synchronise avec un compte
+[Zen IPTV](https://zeniptv.app/)** : profils, sources, favoris et reprise de
+lecture.
+
+La synchronisation fait partie de l'offre payante **Zen Access** : il faut un
+compte Zen avec cet abonnement (Mizu ne le contourne pas, il le réutilise). Et
+il faut **ton propre abonnement IPTV** — Zen comme Mizu ne fournissent aucun
+contenu.
 
 > Application de lecture uniquement : elle ne fournit aucun contenu. Utilise
 > ton propre compte et tes propres sources.
@@ -44,7 +50,8 @@ root), puis crée la commande `mizu`, l'entrée de menu et l'icône.
 Il te demande **quel backend Supabase utiliser** :
 
 - **par défaut, celui de Zen IPTV** — c'est le cas dans 99 % des cas, appuie
-  sur Entrée ;
+  sur Entrée (nécessite un compte [Zen IPTV](https://zeniptv.app/) avec
+  l'abonnement Zen Access pour la synchro) ;
 - réponds `n` pour **ta propre instance** : l'URL et la clé publishable te sont
   demandées (voir [`SUPABASE.md`](SUPABASE.md) pour préparer la base).
 
@@ -226,8 +233,13 @@ MIT — voir [`LICENSE`](LICENSE).
 **English** · [Français](#mizu-iptv-水)
 
 **Unofficial** IPTV client for Linux (and, in time, Android / Android TV /
-macOS), written in Flutter. It **syncs with a Zen IPTV account**: profiles,
-sources, favorites and resume position.
+macOS), written in Flutter. It **syncs with a
+[Zen IPTV](https://zeniptv.app/) account**: profiles, sources, favorites and
+resume position.
+
+Synchronization is part of the paid **Zen Access** plan: you need a Zen account
+with that subscription (Mizu does not bypass it, it reuses it). You also need
+**your own IPTV subscription** — neither Zen nor Mizu provides content.
 
 > Playback only: it provides no content whatsoever. Use your own account and
 > your own sources.
@@ -267,7 +279,8 @@ root), then creates the `mizu` command, the menu entry and the icon.
 It asks **which Supabase backend to use**:
 
 - **Zen IPTV's by default** — that is the case 99% of the time, just press
-  Enter;
+  Enter (requires a [Zen IPTV](https://zeniptv.app/) account with the Zen
+  Access plan for sync);
 - answer `n` for **your own instance**: you are then asked for the URL and the
   publishable key (see [`SUPABASE.md`](SUPABASE.md) to prepare the database).
 

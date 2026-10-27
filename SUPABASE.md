@@ -8,6 +8,15 @@ données). Il ne s'agit pas d'une documentation fournie par l'éditeur : tout a
 été établi par observation (chaînes du binaire, API publique, données de notre
 propre compte).
 
+> **Prérequis pour l'instance de Zen** — la méthode par défaut (backend de Zen)
+> suppose un compte sur [zeniptv.app](https://zeniptv.app/) **avec l'offre
+> payante « Zen Access »** : c'est elle qui débloque la synchronisation
+> (profils, favoris, reprise de lecture). Sans cet abonnement, la synchro n'est
+> pas débloquée dans l'app d'origine : les tables restent alors vides.
+> Mizu ne contourne pas cet abonnement : il réutilise celui du compte.
+> Il faut par ailleurs **ton propre abonnement IPTV** (fournisseur Xtream/M3U) :
+> Zen, comme Mizu, ne fournit aucun contenu.
+
 Fichiers associés :
 
 - [`re/supabase/schema.sql`](re/supabase/schema.sql) — tables, index, RLS, RPC
@@ -19,8 +28,8 @@ Fichiers associés :
 
 ## 1. Ce qu'est le backend
 
-Zen IPTV n'a pas de backend maison : c'est **Supabase**, utilisé de façon
-standard.
+Zen IPTV ([zeniptv.app](https://zeniptv.app/)) n'a pas de backend maison :
+c'est **Supabase**, utilisé de façon standard.
 
 | Brique Supabase | Utilisée par Zen ? | Usage |
 |---|---|---|
@@ -338,6 +347,14 @@ a copy of it for Mizu IPTV (or to back up your data). It is not vendor
 documentation: everything was established by observation (binary strings,
 public API, our own account's data).
 
+> **Prerequisite for the Zen instance** — the default route (Zen's backend)
+> requires an account on [zeniptv.app](https://zeniptv.app/) **with the paid
+> "Zen Access" plan**: that is what unlocks synchronization (profiles,
+> favorites, resume position). Without it, sync stays locked in the official
+> app and those tables remain empty. Mizu does not bypass that subscription: it
+> reuses the account's own plan. You also need **your own IPTV subscription**
+> (Xtream/M3U provider): like Zen, Mizu ships no content.
+
 Related files: [`re/supabase/schema.sql`](re/supabase/schema.sql),
 [`re/supabase/export-data.py`](re/supabase/export-data.py),
 [`re/supabase/README.md`](re/supabase/README.md),
@@ -345,7 +362,8 @@ Related files: [`re/supabase/schema.sql`](re/supabase/schema.sql),
 
 ## 1. What the backend is
 
-Zen IPTV runs on **Supabase**, used the standard way.
+Zen IPTV ([zeniptv.app](https://zeniptv.app/)) runs on **Supabase**, used the
+standard way.
 
 | Supabase part | Used by Zen? | Purpose |
 |---|---|---|
