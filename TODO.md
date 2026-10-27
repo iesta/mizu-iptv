@@ -13,7 +13,6 @@
       (199 Mo → ~40 Mo par architecture).
 - [ ] Vérifier que les films lancés ici produisent une ligne `vod` lisible par
       l'app Zen (`serie_progress.runtimeType = 'vod'`) — non confirmé.
-
 - [ ] **Releases GitHub** : publier l'AppImage, l'APK release, le zip macOS
       (base du cask Homebrew et de `tools/package-macos.sh`).
 - [ ] **Notarisation macOS** (compte Apple Developer) si distribution large ;
