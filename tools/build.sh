@@ -12,9 +12,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/_arch.sh"
 ENV_FILE="$ROOT/.env"
 TARGET="${1:-linux}"
 shift || true
+
+require_flutter
 
 DEFINES=()
 if [[ -f "$ENV_FILE" ]]; then

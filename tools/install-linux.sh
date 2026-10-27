@@ -41,6 +41,7 @@ NO_BUILD=0
 [[ "${1:-}" == "--no-build" ]] && NO_BUILD=1
 
 if [[ "$NO_BUILD" -eq 0 ]]; then
+  require_flutter
   echo "== build release =="
   "$ROOT/tools/build.sh" linux
 fi
