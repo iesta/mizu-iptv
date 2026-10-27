@@ -13,8 +13,10 @@
       (199 Mo → ~40 Mo par architecture).
 - [ ] Vérifier que les films lancés ici produisent une ligne `vod` lisible par
       l'app Zen (`serie_progress.runtimeType = 'vod'`) — non confirmé.
-- [ ] **Releases GitHub** : publier l'AppImage, l'APK release, le zip macOS
-      (base du cask Homebrew et de `tools/package-macos.sh`).
+- [x] ~~Releases GitHub~~ → `v0.1.0` publiée (AppImage x86_64 + SHA256SUMS).
+- [ ] **Artefact arm64** : builder l'AppImage aarch64 (machine ARM ou runner
+      `ubuntu-24.04-arm`) et l'attacher à la release.
+- [ ] CI GitHub Actions (matrix linux x86_64 / arm64 / macOS) sur tag.
 - [ ] **Notarisation macOS** (compte Apple Developer) si distribution large ;
       sans elle, cask personnel uniquement + clic droit → Ouvrir.
 

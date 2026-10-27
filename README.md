@@ -59,6 +59,10 @@ modifiable ensuite dans **Préférences**.
 Lancer : `mizu` ou le menu Applications.
 Désinstallation : `~/.local/share/mizu/uninstall.sh`.
 
+> L'AppImage publiée est **x86_64**. Sur une machine **arm64** (aarch64), le
+> script te le signale et renvoie vers la construction locale — voir
+> [INSTALL.md](INSTALL.md#depuis-les-sources).
+
 ### Autres méthodes
 
 Paquets gérés (Flatpak, AUR, Homebrew), installation depuis les sources
@@ -286,6 +290,10 @@ changed later in **Preferences**.
 
 Run it: `mizu` or the Applications menu.
 Uninstall: `~/.local/share/mizu/uninstall.sh`.
+
+> The published AppImage is **x86_64**. On an **arm64** (aarch64) machine the
+> script tells you so and points to a local build — see
+> [INSTALL.md](INSTALL.md#from-source).
 
 ### Other methods
 

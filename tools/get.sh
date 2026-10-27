@@ -102,18 +102,49 @@ if [ -n "$FROM" ]; then
   echo "source locale : $SRC"
 else
   SRC="$TMP/mizu.AppImage"
-  URL="https://github.com/$REPO/releases/latest/download/Mizu-IPTV-$ARCH.AppImage"
-  echo "téléchargement : $URL"
-  if ! curl -fsSL -o "$SRC" "$URL"; then
+  API="https://api.github.com/repos/$REPO/releases/latest"
+
+  echo "recherche de la dernière release…"
+  ASSETS="$(curl -fsSL "$API" 2>/dev/null | tr ',' '\n' \
+            | grep -o 'https://[^"]*\.AppImage' | sort -u || true)"
+
+  if [ -z "$ASSETS" ]; then
     cat >&2 <<EOF
 
-Aucune release téléchargeable pour $ARCH.
+Aucune release publiée pour l'instant.
 
-Autres méthodes d'installation : INSTALL.md
-  - paquets : flatpak, AUR, Homebrew
-  - depuis les sources : voir INSTALL.md
+Installer depuis les sources :
+  git clone https://github.com/$REPO.git && cd mizu-iptv
+  ./tools/install-linux.sh
+
+Autres méthodes : INSTALL.md
 
 EOF
+    exit 1
+  fi
+
+  URL="$(printf '%s\n' "$ASSETS" | grep -- "-$ARCH\.AppImage$" | head -1 || true)"
+  if [ -z "$URL" ]; then
+    AVAILABLE="$(printf '%s\n' "$ASSETS" | sed 's|.*/||' | tr '\n' ' ')"
+    cat >&2 <<EOF
+
+Pas d'AppImage pour $ARCH dans la dernière release.
+Disponible : $AVAILABLE
+
+Construis-la sur cette machine (les scripts détectent l'architecture) :
+  git clone https://github.com/$REPO.git && cd mizu-iptv
+  ./tools/install-linux.sh                 # build + installation dans ~/.local
+  # ou seulement l'artefact portable :
+  ./tools/package-appimage.sh
+
+EOF
+    exit 1
+  fi
+
+  echo "téléchargement : $URL"
+  if ! curl -fsSL -o "$SRC" "$URL"; then
+    echo "téléchargement impossible : $URL" >&2
+    echo "Installer depuis les sources : voir INSTALL.md" >&2
     exit 1
   fi
 fi
