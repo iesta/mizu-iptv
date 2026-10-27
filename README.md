@@ -28,9 +28,25 @@ profils, sources, favoris et reprise de lecture.
 
 ## Installer
 
-Aucune release n'est encore publiée : aujourd'hui on installe depuis les
-sources (les commandes ci-dessous sont complètes, copier-coller). Dès qu'une
-release existera, les lignes « release » seront en un seul `curl`.
+### Une ligne (dès qu'une release publique existe)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iesta/mizu-iptv/main/tools/get.sh | sh
+```
+
+Le script télécharge la dernière AppImage, l'installe dans `~/.local` (sans
+root), crée `mizu`, l'entrée de menu et l'icône. Désinstallation :
+`~/.local/share/mizu/uninstall.sh`. Le script est court et lisible :
+[`tools/get.sh`](tools/get.sh).
+
+Autres one-liners, par écosystème : `yay -S mizu-iptv` (AUR),
+`flatpak install --user ./app.mizu.iptv.flatpak`,
+`brew tap iesta/mizu && brew install --cask mizu-iptv` (macOS).
+
+### Depuis les sources
+
+Aucune release n'est encore publiée : on installe depuis les sources (les
+commandes ci-dessous sont complètes, copier-coller).
 
 ### Arch / Omarchy
 
@@ -152,6 +168,14 @@ flatpak install --user flathub org.freedesktop.Platform//24.08 \
 ```
 
 **macOS** — sur un Mac : `./tools/package-macos.sh` (zip + sha256 pour le cask).
+
+**Release GitHub** — construit l'AppImage, calcule les sommes et publie :
+
+```bash
+./tools/release.sh 0.1.0 --apk       # ou --draft pour un brouillon
+```
+
+C'est ce qui rend l'installation en une ligne possible.
 
 ### État des paquets
 
@@ -355,9 +379,25 @@ sources, favorites and resume position.
 
 ## Install
 
-No release is published yet: for now you install from source (the commands
-below are complete, copy-paste). Once a release exists, the "release" lines
-become a single `curl`.
+### One line (once a public release exists)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iesta/mizu-iptv/main/tools/get.sh | sh
+```
+
+The script downloads the latest AppImage, installs it under `~/.local` (no
+root), and creates `mizu`, the menu entry and the icon. Uninstall:
+`~/.local/share/mizu/uninstall.sh`. The script is short and readable:
+[`tools/get.sh`](tools/get.sh).
+
+Other one-liners, per ecosystem: `yay -S mizu-iptv` (AUR),
+`flatpak install --user ./app.mizu.iptv.flatpak`,
+`brew tap iesta/mizu && brew install --cask mizu-iptv` (macOS).
+
+### From source
+
+No release is published yet: install from source (the commands below are
+complete, copy-paste).
 
 ### Arch / Omarchy
 
@@ -479,6 +519,14 @@ flatpak install --user flathub org.freedesktop.Platform//24.08 \
 ```
 
 **macOS** — on a Mac: `./tools/package-macos.sh` (zip + sha256 for the cask).
+
+**GitHub release** — builds the AppImage, computes checksums and publishes:
+
+```bash
+./tools/release.sh 0.1.0 --apk       # or --draft for a draft
+```
+
+That is what makes the one-line install possible.
 
 ### Package status
 
