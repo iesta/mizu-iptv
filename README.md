@@ -8,7 +8,7 @@ macOS), écrit en Flutter. Il se **synchronise avec un compte
 lecture.
 
 La synchronisation dépend de l'offre payante **Zen Access** du compte Zen :
-> Mizu ne la contourne pas, il la réutilise.
+Mizu ne la contourne pas, il la réutilise.
 
 > Application de lecture uniquement : elle ne fournit aucun contenu. Il te faut
 > ton propre abonnement IPTV et ton propre compte [Zen IPTV](https://zeniptv.app/).
@@ -236,7 +236,7 @@ macOS), written in Flutter. It **syncs with a
 resume position.
 
 Synchronization depends on the paid **Zen Access** plan of the Zen account:
-> Mizu does not bypass it, it reuses it.
+Mizu does not bypass it, it reuses it.
 
 > Playback only: it provides no content whatsoever. You need your own IPTV
 > subscription and your own [Zen IPTV](https://zeniptv.app/) account.
