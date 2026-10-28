@@ -7,7 +7,8 @@ embarquée.
 
 Lire d'abord : [`README.md`](README.md) (usage, install en une ligne),
 [`INSTALL.md`](INSTALL.md) (paquets et build depuis les sources, FR/EN),
-[`TODO.md`](TODO.md) (état des tâches et pistes écartées),
+[`HANDOFF.md`](HANDOFF.md) (état de la dernière session + reprise sur une autre
+machine), [`TODO.md`](TODO.md) (état des tâches et pistes écartées),
 [`SUPABASE.md`](SUPABASE.md) (backend Zen : structure et reproduction, FR/EN),
 [`re/PROTOCOL.md`](re/PROTOCOL.md) (protocole observé),
 [`re/supabase/`](re/supabase/) (schéma + export).
@@ -23,6 +24,13 @@ Lire d'abord : [`README.md`](README.md) (usage, install en une ligne),
 Le dossier `app/macos/` existe déjà et est configuré (icônes, entitlements,
 ATS). **Ne pas relancer `flutter create --platforms=macos .`** : cela écraserait
 `macos/Runner/Configs/AppInfo.xcconfig` et les entitlements.
+
+## Reprendre la dernière session sur une autre machine
+
+Voir **[`HANDOFF.md`](HANDOFF.md)** (état, fonctionnalités, points en suspens,
+procédure macOS). La session OpenCode brute est exportée hors dépôt
+(`~/mizu-opencode-session.json`, sanitized) et se réimporte avec
+`opencode import ~/mizu-opencode-session.json`.
 
 ## Compiler sur un Mac
 
@@ -80,9 +88,10 @@ Points spécifiques macOS :
 
 | Machine | Cible | Ce qu'elle valide |
 |---|---|---|
+| MacBook Air M1 (Asahi) | Linux arm64 | dev actuel : build/run Linux arm64 ; **pas d'Android local** (SDK/build-tools/émulateur indisponibles) |
 | Bureau x86_64 | Linux (Omarchy) | développement principal, AppImage, Flatpak, menu XDG |
-| Mac arm64 | macOS | Xcode/CocoaPods, entitlements, rendu vidéo macOS |
-| Linux arm64 | Linux (Omarchy) | compilation arm64, libmpv système, performances |
+| Mac arm64 (macOS) | macOS | Xcode/CocoaPods, entitlements, rendu vidéo macOS, émulateur Android via Android Studio |
+| CI GitHub Actions | tous | releases AppImage / APK / macOS sur tag `v*` |
 
 **Une seule branche `main`.** Pas de branche par plateforme : >95 % du code est
 partagé, les différences vivent dans `lib/platform/`, `lib/theme/` et les
@@ -113,13 +122,18 @@ Les sessions locales vivent hors du dépôt : `~/.config/mizu/session.json`
 ## Carte du code
 
 ```
-app/lib/main.dart              init Supabase + media_kit + thème
-app/lib/mizu_config.dart       backend configurable (fichier ou env)
+app/lib/main.dart              init Supabase + media_kit + thème + raccourci Ctrl+,
+app/lib/mizu_config.dart       backend configurable + préférences (sections, accueil…)
 app/lib/platform/app_dirs.dart chemins XDG (Linux) ou path_provider (mobile/mac)
+app/lib/platform/mpris_service.dart  MPRIS Linux (dbus) pour les touches média
 app/lib/data/                  Supabase (sync_repository), Xtream, M3U, index TMDB
 app/lib/state/app_state.dart   session, profils, sync, polling
-app/lib/ui/                    login, favoris (3 colonnes), sources (+formulaire),
-                               catalogue, fiche, lecteur, préférences
+app/lib/ui/                    login, accueil, favoris, reprise, sources, catalogue,
+                               fiche, lecteur, préférences
+app/lib/ui/home_tab.dart       onglet Accueil (blocs configurables)
+app/lib/ui/home_blocks.dart    définitions/ordre des blocs Accueil
+app/lib/ui/cached_image.dart   cache disque des covers (30 j / 500 Mo)
+app/lib/ui/catalog_options.dart options de tri partagées
 app/lib/ui/tv_focus.dart       focus télécommande (liseré) + Échap = retour
 app/lib/theme/omarchy_theme.dart palette Omarchy sinon thème par défaut
 re/                            ingénierie inverse, schéma, scripts d'export
@@ -139,8 +153,11 @@ tools/make_icons.py            logo 水 → assets Linux/Android/macOS
 - Avant de committer : `flutter analyze` sans erreur + build de la plateforme
   touchée. Messages de commit en français, impératif, une ligne de titre.
 - Variables utiles pour les tests manuels :
-  `MIZU_TAB=0|1|2` (0 Favoris, 1 Sources, 2 Reprendre), `MIZU_ROUTE=browse:|xt:|xtplay:|detail:|add:`,
-  `MIZU_AUTOPLAY=1`.
+  `MIZU_TAB=<index>` (index positionnel ; Accueil = 0 s'il est activé),
+  `MIZU_ROUTE=browse:|xt:|xtplay:|detail:|add:`, `MIZU_AUTOPLAY=1`.
+- Raccourcis : `Ctrl+,` ouvre les préférences partout ; `Échap` ferme
+  fiche/préférences/lecteur ; `f` (focus recherche) et `,` (panneau
+  d'affichage) dans le catalogue ; touches média Linux via MPRIS.
 
 ## Pièges connus (déjà rencontrés)
 
@@ -157,10 +174,21 @@ tools/make_icons.py            logo 水 → assets Linux/Android/macOS
 - **`content_id`** = id TMDB pour `vod`/`serie`, **nom de la chaîne** pour
   `channel`. Les TMDB ids sont résolus par l'index local du catalogue
   (`CatalogIndex`), pas par l'API TMDB (clé optionnelle).
+- **Versions de séries** : un même TMDB peut avoir plusieurs `series_id`
+  (qualité/langue) ; la fiche propose un sélecteur « Version ». Silo n'a qu'une
+  entrée, les libellés FR/MULTI étant dans les titres d'épisodes.
+- **Sources supprimées** : `CatalogIndex` n'est pas élagué à la suppression ;
+  Favoris/Reprendre désactivent l'ouverture si aucun candidat ne pointe vers
+  une source encore présente.
+- **Cache images** : `~/.cache/mizu/images` (TTL 30 j, 500 Mo), pas de purge UI ;
+  les covers ne sont plus re-téléchargées à chaque démarrage.
+- **MPRIS** : `org.mpris.MediaPlayer2.mizu` (paquet `dbus`) pour les touches
+  média Linux — à vérifier sur le bus quand le lecteur est ouvert.
 
 ## Reste à faire
 
-Liste tenue à jour dans [`TODO.md`](TODO.md). En résumé : compiler macOS,
-masquer la barre de seek sur le direct, liseré de focus sur les chaînes, APK
-release signé, puis publication (remote privé d'abord).
+Liste tenue à jour dans [`TODO.md`](TODO.md). En résumé : valider la **lecture
+macOS** et l'émulateur Android (via Android Studio sur macOS), fiabiliser
+**MPRIS**, APK release signé, puis publication du dépôt (remote privé d'abord).
+Voir aussi [`HANDOFF.md`](HANDOFF.md) pour les points en suspens de la session.
 

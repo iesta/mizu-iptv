@@ -5,17 +5,23 @@
 - [x] ~~**macOS** : compiler et valider sur un Mac~~ → build + lancement OK
       (écran de connexion, `.env` injecté). Reste à valider lecture Live TV et
       login (procédure dans [`AGENTS.md`](AGENTS.md#compiler-sur-un-mac)).
-- [x] ~~Direct : barre de progression~~ → masquée pour `channel`
-      (commit `9aa98be`).
+- [x] ~~Session 2026-10-28 (v0.2/v0.3)~~ → Accueil configurable (blocs),
+      préférences en onglets, notes sur 10, cache disque des covers, reprise
+      grille/liste, sélecteur de version des séries, bandes-annonces TMDB,
+      raccourcis (Ctrl+, / Échap / f / ,), MPRIS Linux, état « source supprimée ».
+- [ ] **MPRIS** : fiabiliser — le nom `org.mpris.MediaPlayer2.mizu` ne
+      s'enregistrait pas sur le bus lors du test (service standalone OK).
+- [ ] **macOS** : valider la lecture vidéo (media_kit/libmpv) et l'émulateur
+      Android via Android Studio ; voir [`HANDOFF.md`](HANDOFF.md).
 - [ ] **Focus TV** : liseré de focus sur les lignes de chaînes (aujourd'hui un
       simple `focusColor`, trop discret à 3 m).
 - [ ] **APK release** : keystore + `flutter build apk --split-per-abi`
       (199 Mo → ~40 Mo par architecture).
 - [ ] Vérifier que les films lancés ici produisent une ligne `vod` lisible par
       l'app Zen (`serie_progress.runtimeType = 'vod'`) — non confirmé.
-- [x] ~~Releases GitHub~~ → `v0.1.0` publiée (AppImage x86_64 + SHA256SUMS).
+- [x] ~~Releases GitHub~~ → `v0.1.0`, `v0.1.1`, `v0.1`, `v0.2`, `v0.3`.
 - [x] ~~CI GitHub Actions~~ → tag `v*` publie AppImage x86_64, APK par ABI et
-      zip macOS (run `v0.1.1` vert).
+      zip macOS.
 - [x] ~~Artefact arm64~~ → impossible : Flutter ne fournit pas de SDK Linux
       arm64 (vérifié dans `releases_linux.json`). Pas de build ARM.
 - [ ] Variante `zen` en CI (`-f flavor=zen`) : à valider par un dispatch.

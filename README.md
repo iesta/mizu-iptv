@@ -2,8 +2,8 @@
 
 **Français** · [English](#english)
 
-Client IPTV **non officiel** pour Linux (et, à terme, Android / Android TV /
-macOS), écrit en Flutter. Il se **synchronise avec un compte
+Client IPTV **non officiel** pour Linux, Android / Android TV et macOS, écrit
+en Flutter. Il se **synchronise avec un compte
 [Zen IPTV](https://zeniptv.app/)** : profils, sources, favoris et reprise de
 lecture.
 
@@ -26,13 +26,21 @@ Mizu ne la contourne pas, il la réutilise.
 | Sources synchronisées (Xtream + M3U) | ✅ |
 | Gérer les sources : ajouter / modifier / supprimer / tester | ✅ |
 | Live TV / Films / Séries, colonne de catégories + recherche | ✅ |
+| Accueil configurable : blocs de covers (ordre + activation) | ✅ |
+| Préférences en onglets (Compte/Synchro/Données brutes, TMDB, À propos) | ✅ |
+| Notes sur 10 et étoiles | ✅ |
+| Reprise en grille ou liste (recherche, tri, taille des vignettes) | ✅ |
+| Sélecteur de version des séries (plusieurs `series_id`) | ✅ |
+| Bandes-annonces TMDB (ouverture externe) | ✅ |
+| Cache disque des covers (30 j, 500 Mo) | ✅ |
+| Touches média Linux (MPRIS) | 🚧 à fiabiliser |
 | Favoris par profil (noms + affiches, ajout/retrait) | ✅ |
 | Reprise de lecture (« Reprendre SxEy », saison et position) | ✅ |
 | Lecteur libmpv : pistes audio et sous-titres | ✅ |
 | Thème : suit Omarchy si présent, sinon thème par défaut | ✅ |
 | Navigation télécommande / clavier (D-pad) | ✅ sources, catalogue, fiche, lecteur |
-| Build Android / Android TV | ✅ APK debug + manifest TV (Leanback) |
-| Build macOS | 🚧 à faire sur un Mac (Xcode) |
+| Build Android / Android TV | ✅ APK debug + manifest TV (Leanback) ; APK release via CI |
+| Build macOS | ✅ build + lancement ; lecture à valider |
 
 ## Installer
 
@@ -114,16 +122,35 @@ Télécommande / manette :
 
 ## Regarder
 
-0. Onglet **Préférences** (roue dentée, aussi accessible avant connexion) :
-   URL du backend, clé publishable, clé TMDB. Se déconnecter s'y trouve aussi.
-1. Onglet **Sources** → clique une carte (ou l'icône grille) pour ouvrir le
+0. Onglet **Accueil** (s'il est activé) : blocs de covers — dernières sorties
+   films/séries, tendances TMDB, reprise et favoris. L'onglet et chaque bloc
+   s'activent/désactivent et se réordonnent dans **Préférences → Accueil**.
+1. Onglet **Préférences** (roue dentée, aussi accessible avant connexion) :
+   onglets **Compte** (Compte, Synchro, Données brutes), **TMDB**, **À propos**.
+   URL du backend, clé publishable, clé TMDB et déconnexion s'y trouvent.
+2. Onglet **Sources** → clique une carte (ou l'icône grille) pour ouvrir le
    catalogue.
-2. **Live TV** / **Films** / **Séries** : colonne de catégories à gauche,
-   recherche en haut, grille ou liste à droite.
-3. Chaîne → lecture directe ; film → fiche → *Lecture* ; série → fiche →
-   saison → épisode.
-4. Le lecteur enregistre la position dans `serie_progress` toutes les 15 s et à
+3. **Live TV** / **Films** / **Séries** : colonne de catégories à gauche,
+   recherche en haut, grille ou liste à droite. Sélecteur de **version** quand
+   une série a plusieurs `series_id`.
+4. Chaîne → lecture directe ; film → fiche → *Lecture* ; série → fiche →
+   saison → épisode. La fiche propose bande-annonce, favoris et menu « … ».
+5. Le lecteur enregistre la position dans `serie_progress` toutes les 15 s et à
    la fermeture (profil actif). ♥ ajoute aux favoris.
+
+## Raccourcis
+
+| Touche | Action |
+|---|---|
+| Ctrl+, (⌘+,) | ouvrir les Préférences, partout |
+| Échap | fermer fiche / Préférences / lecteur |
+| f (catalogue) | focus sur la recherche |
+| , (catalogue) | panneau d'affichage (tri, taille des vignettes) |
+| Espace (lecteur) | lecture / pause |
+| ← / → (lecteur) | ±10 s (Ctrl = ±1 min, Ctrl+Maj = ±10 min) |
+| ↑ / ↓ (lecteur) | volume |
+| M (lecteur) | muet |
+| Touches média | lecture / pause / stop (Linux, MPRIS) |
 
 ## Configuration
 
@@ -160,6 +187,16 @@ local du catalogue.
 Sur Omarchy, l'app lit `~/.local/state/omarchy/current/theme/colors.toml` et en
 dérive ses couleurs (fond, cartes, accent, erreurs). Relecture toutes les 8 s :
 un changement de thème s'applique à chaud. Ailleurs, thème par défaut.
+
+## Cache
+
+- Métadonnées TMDB : `~/.cache/mizu/metadata.json` (TTL 30 jours).
+- **Covers** (TMDB et Xtream) : `~/.cache/mizu/images/` — TTL 30 jours, max
+  500 Mo, purge des plus anciennes. Supprimer le dossier pour vider le cache.
+- Index du catalogue : `~/.cache/mizu/catalog_index_v2.json`.
+
+Sur macOS / Android, ces fichiers sont dans le dossier de cache applicatif
+(`~/Library/Application Support/app.mizu.iptv/` ou le cache de l'app).
 
 ## Héberger sa propre instance Supabase
 
@@ -210,7 +247,9 @@ sauvegarder tes données).
 app/                 client Flutter
   lib/data/          accès Supabase, Xtream, M3U, index TMDB
   lib/state/         session, profils, synchronisation
-  lib/ui/            écrans (login, sources, catalogue, fiche, lecteur)
+  lib/platform/      chemins XDG, MPRIS Linux
+  lib/ui/            écrans (login, accueil, sources, catalogue, fiche, lecteur)
+                     home_tab/home_blocks, cached_image, catalog_options
   lib/theme/         palette Omarchy / thème par défaut
 re/                  ingénierie inverse et documentation du protocole
 ```
@@ -234,8 +273,8 @@ MIT — voir [`LICENSE`](LICENSE).
 
 **English** · [Français](#mizu-iptv-水)
 
-**Unofficial** IPTV client for Linux (and, in time, Android / Android TV /
-macOS), written in Flutter. It **syncs with a
+**Unofficial** IPTV client for Linux, Android / Android TV and macOS, written
+in Flutter. It **syncs with a
 [Zen IPTV](https://zeniptv.app/) account**: profiles, sources, favorites and
 resume position.
 
@@ -258,13 +297,21 @@ Mizu does not bypass it, it reuses it.
 | Synced sources (Xtream + M3U) | ✅ |
 | Manage sources: add / edit / remove / test | ✅ |
 | Live TV / Movies / Series, category column + search | ✅ |
+| Configurable Home tab: cover blocks (order + enable/disable) | ✅ |
+| Tabbed Preferences (Account/Sync/Raw data, TMDB, About) | ✅ |
+| Ratings out of 10 and stars | ✅ |
+| Resume as grid or list (search, sort, thumbnail size) | ✅ |
+| Series version picker (multiple `series_id`) | ✅ |
+| TMDB trailers (external launch) | ✅ |
+| On-disk cover cache (30 days, 500 MB) | ✅ |
+| Linux media keys (MPRIS) | 🚧 to be stabilised |
 | Per-profile favorites (names + posters, add/remove) | ✅ |
 | Resume playback ("Resume SxEy", season and position) | ✅ |
 | libmpv player: audio and subtitle tracks | ✅ |
 | Theme: follows Omarchy when present, default otherwise | ✅ |
 | Remote / keyboard navigation (D-pad) | ✅ sources, catalog, detail, player |
-| Android / Android TV build | ✅ debug APK + TV manifest (Leanback) |
-| macOS build | ✅ builds and launches on an Apple Silicon Mac; video not yet validated |
+| Android / Android TV build | ✅ debug APK + TV manifest (Leanback); release APK via CI |
+| macOS build | ✅ builds and launches; playback to be validated |
 
 ## Install
 
@@ -345,15 +392,34 @@ Remote / gamepad:
 
 ## Watching
 
-0. **Preferences** tab (gear icon, also reachable before signing in): backend
-   URL, publishable key, TMDB key. Sign-out lives there too.
-1. **Sources** tab → click a card (or the grid icon) to open the catalog.
-2. **Live TV** / **Movies** / **Series**: category column on the left, search at
-   the top, grid or list on the right.
-3. Channel → plays immediately; movie → detail → *Play*; series → detail →
-   season → episode.
-4. The player saves the position into `serie_progress` every 15 s and on close
+0. **Home** tab (when enabled): cover blocks — latest movies/series, TMDB
+   trending, resume and favorites. The tab and each block can be enabled,
+   disabled and reordered in **Preferences → Home**.
+1. **Preferences** tab (gear icon, also reachable before signing in): tabs
+   **Account** (Account, Sync, Raw data), **TMDB**, **About**. Backend URL,
+   publishable key, TMDB key and sign-out live there.
+2. **Sources** tab → click a card (or the grid icon) to open the catalog.
+3. **Live TV** / **Movies** / **Series**: category column on the left, search
+   at the top, grid or list on the right. A **version** picker appears when a
+   series has several `series_id`.
+4. Channel → plays immediately; movie → detail → *Play*; series → detail →
+   season → episode. The detail page offers trailer, favorites and a "…" menu.
+5. The player saves the position into `serie_progress` every 15 s and on close
    (active profile). ♥ adds to favorites.
+
+## Shortcuts
+
+| Key | Action |
+|---|---|
+| Ctrl+, (⌘+,) | open Preferences, from anywhere |
+| Escape | close detail / Preferences / player |
+| f (catalog) | focus the search field |
+| , (catalog) | display panel (sort, thumbnail size) |
+| Space (player) | play / pause |
+| ← / → (player) | ±10 s (Ctrl = ±1 min, Ctrl+Shift = ±10 min) |
+| ↑ / ↓ (player) | volume |
+| M (player) | mute |
+| Media keys | play / pause / stop (Linux, MPRIS) |
 
 ## Configuration
 
@@ -388,6 +454,16 @@ catalog index.
 On Omarchy the app reads `~/.local/state/omarchy/current/theme/colors.toml` and
 derives its colors from it (background, cards, accent, errors). It is re-read
 every 8 s: a theme change applies live. Elsewhere, the default theme is used.
+
+## Cache
+
+- TMDB metadata: `~/.cache/mizu/metadata.json` (30-day TTL).
+- **Covers** (TMDB and Xtream): `~/.cache/mizu/images/` — 30-day TTL, 500 MB
+  max, oldest files evicted. Delete the folder to clear it.
+- Catalog index: `~/.cache/mizu/catalog_index_v2.json`.
+
+On macOS / Android these live in the app cache/support directory
+(`~/Library/Application Support/app.mizu.iptv/` or the app cache).
 
 ## Hosting your own Supabase instance
 
@@ -437,7 +513,9 @@ data).
 app/                 Flutter client
   lib/data/          Supabase, Xtream, M3U, TMDB index
   lib/state/         session, profiles, sync
-  lib/ui/            screens (login, sources, catalog, detail, player)
+  lib/platform/      XDG paths, Linux MPRIS
+  lib/ui/            screens (login, home, sources, catalog, detail, player)
+                     home_tab/home_blocks, cached_image, catalog_options
   lib/theme/         Omarchy palette / default theme
 re/                  reverse engineering and protocol documentation
 ```
