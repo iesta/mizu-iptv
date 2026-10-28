@@ -39,7 +39,7 @@ Mizu ne la contourne pas, il la réutilise.
 | Lecteur libmpv : pistes audio et sous-titres | ✅ |
 | Thème : suit Omarchy si présent, sinon thème par défaut | ✅ |
 | Navigation télécommande / clavier (D-pad) | ✅ sources, catalogue, fiche, lecteur |
-| Build Android / Android TV | ✅ APK debug + manifest TV (Leanback) ; APK release via CI |
+| Build Android / Android TV | 🚧 APK debug OK, **pas prêt** : mise en page téléphone non finalisée, D-pad à valider écran par écran |
 | Build macOS | ✅ build + lancement ; lecture à valider |
 
 ## Installer
@@ -92,6 +92,11 @@ Dépendances système (Linux) : `clang cmake ninja pkg-config libgtk-3-dev
 libmpv` (media_kit).
 
 ## Android / Android TV
+
+> **État : pas prêt.** Le build et la connexion fonctionnent (testés en
+> émulateur Android 16 / Android TV), mais la mise en page téléphone et la
+> navigation à la télécommande restent à finaliser écran par écran. Utilise
+> Linux ou macOS pour un usage quotidien.
 
 ```bash
 export ANDROID_HOME=~/dev/tools/android-sdk
@@ -310,7 +315,7 @@ Mizu does not bypass it, it reuses it.
 | libmpv player: audio and subtitle tracks | ✅ |
 | Theme: follows Omarchy when present, default otherwise | ✅ |
 | Remote / keyboard navigation (D-pad) | ✅ sources, catalog, detail, player |
-| Android / Android TV build | ✅ debug APK + TV manifest (Leanback); release APK via CI |
+| Android / Android TV build | 🚧 debug APK OK, **not ready**: phone layout unfinished, D-pad to be validated screen by screen |
 | macOS build | ✅ builds and launches; playback to be validated |
 
 ## Install
@@ -362,6 +367,10 @@ System dependencies (Linux): `clang cmake ninja pkg-config libgtk-3-dev
 libmpv` (media_kit).
 
 ## Android / Android TV
+
+> **Status: not ready.** Build and sign-in work (tested on Android 16 and
+> Android TV emulators), but the phone layout and remote-control navigation
+> still need work screen by screen. Use Linux or macOS for daily use.
 
 ```bash
 export ANDROID_HOME=~/dev/tools/android-sdk
