@@ -15,14 +15,43 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
+  final _emailKey = GlobalKey();
+  final _passwordKey = GlobalKey();
   bool _busy = false;
   bool _signUp = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _emailFocus.addListener(() => _revealField(_emailFocus, _emailKey));
+    _passwordFocus.addListener(
+        () => _revealField(_passwordFocus, _passwordKey));
+  }
+
+  /// Sur TV/Android, le clavier s'affiche en surimpression (pas de
+  /// `viewInsets`) et masque le champ : on le fait défiler en haut d'écran.
+  void _revealField(FocusNode node, GlobalKey key) {
+    if (!node.hasFocus) return;
+    Future<void>.delayed(const Duration(milliseconds: 300), () {
+      final ctx = key.currentContext;
+      if (!mounted || ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.05,
+        duration: const Duration(milliseconds: 200),
+      );
+    });
+  }
+
+  @override
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -109,28 +138,36 @@ class _LoginPageState extends State<LoginPage> {
                       ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 32),
-                TextField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.alternate_email),
-                    border: OutlineInputBorder(),
+                KeyedSubtree(
+                  key: _emailKey,
+                  child: TextField(
+                    controller: _email,
+                    focusNode: _emailFocus,
+                    keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email],
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      prefixIcon: Icon(Icons.alternate_email),
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _submit(),
                   ),
-                  onSubmitted: (_) => _submit(),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _password,
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.password],
-                  decoration: const InputDecoration(
-                    labelText: 'Mot de passe',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(),
+                KeyedSubtree(
+                  key: _passwordKey,
+                  child: TextField(
+                    controller: _password,
+                    focusNode: _passwordFocus,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.password],
+                    decoration: const InputDecoration(
+                      labelText: 'Mot de passe',
+                      prefixIcon: Icon(Icons.lock_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _submit(),
                   ),
-                  onSubmitted: (_) => _submit(),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),

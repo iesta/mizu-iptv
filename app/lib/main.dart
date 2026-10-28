@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'mizu_config.dart';
 import 'platform/app_dirs.dart';
+import 'platform/ui_scale.dart';
 import 'state/app_state.dart';
 import 'theme/omarchy_theme.dart';
 import 'ui/home_page.dart';
@@ -19,6 +20,7 @@ Future<void> main() async {
   MediaKit.ensureInitialized();
   await AppDirs.init();
   MizuConfig.init();
+  await UiScale.init();
 
   // Sans backend configuré, on n'initialise pas Supabase : l'app affiche
   // l'écran de configuration au premier lancement.
@@ -53,14 +55,21 @@ class _MizuAppState extends State<MizuApp> {
     HardwareKeyboard.instance.addHandler(_onKey);
   }
 
-  /// Ctrl+, (ou ⌘+,) ouvre les préférences depuis n'importe quel écran.
+  /// Ctrl+, / ⌘+, ouvre les préférences ; Ctrl+R / ⌘+R rafraîchit le compte
+  /// (favoris, reprise, sources) depuis n'importe quel écran.
   bool _onKey(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
-    if (event.logicalKey != LogicalKeyboardKey.comma) return false;
     final keyboard = HardwareKeyboard.instance;
     if (!keyboard.isControlPressed && !keyboard.isMetaPressed) return false;
-    _openSettings();
-    return true;
+    if (event.logicalKey == LogicalKeyboardKey.comma) {
+      _openSettings();
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyR) {
+      widget.state?.refresh();
+      return true;
+    }
+    return false;
   }
 
   void _openSettings() {
@@ -108,6 +117,17 @@ class _MizuAppState extends State<MizuApp> {
           debugShowCheckedModeBanner: false,
           navigatorKey: _navigatorKey,
           theme: _themes.theme,
+          builder: (context, child) {
+            final media = MediaQuery.of(context);
+            if (UiScale.textFactor == 1.0) return child!;
+            return MediaQuery(
+              data: media.copyWith(
+                textScaler:
+                    TextScaler.linear(media.textScaler.scale(1) * UiScale.textFactor),
+              ),
+              child: child!,
+            );
+          },
           home: home,
         );
       },

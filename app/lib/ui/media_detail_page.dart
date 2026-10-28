@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/metadata_service.dart';
 import '../data/models.dart';
 import '../data/xtream_client.dart';
+import '../platform/ui_scale.dart';
 import '../state/app_state.dart';
 import 'player_page.dart';
 import 'cached_image.dart';
@@ -573,7 +574,8 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                   )
                 : MediaQuery(
                     data: MediaQuery.of(context).copyWith(
-                      textScaler: const TextScaler.linear(1.5),
+                      // TV : le gros facteur global suffit, on n'en rajoute pas.
+                      textScaler: TextScaler.linear(UiScale.isTv ? 1.1 : 1.5),
                     ),
                     child: Stack(
                       children: [

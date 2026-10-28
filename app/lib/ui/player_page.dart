@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../mizu_config.dart';
+import '../platform/mac_media_session.dart';
 import '../platform/mpris_service.dart';
 import '../state/app_state.dart';
 
@@ -107,6 +108,15 @@ class _PlayerPageState extends State<PlayerPage> {
         position: () => _position,
       );
     }
+    // Touche play/pause du Mac (et centre de contrôle).
+    MacMediaSession.instance.start(
+      title: widget.title,
+      subtitle: widget.subtitle,
+      onPlay: () => _player.play(),
+      onPause: () => _player.pause(),
+      onPlayPause: () => _player.playOrPause(),
+      onStop: () => _player.pause(),
+    );
 
     _subs.add(_player.stream.position.listen((p) => setState(() => _position = p)));
     _subs.add(_player.stream.duration.listen((d) {
@@ -117,6 +127,7 @@ class _PlayerPageState extends State<PlayerPage> {
         _seekable = widget.contentType != 'channel' &&
             d > const Duration(seconds: 5);
       });
+      MacMediaSession.instance.setDuration(d);
       final pending = _pendingSeek;
       if (pending != null && d > const Duration(seconds: 1)) {
         _pendingSeek = null;
@@ -129,6 +140,8 @@ class _PlayerPageState extends State<PlayerPage> {
         if (p) _error = null;
       });
       MprisService.instance.setPlaying(p);
+      MacMediaSession.instance
+          .setPlaying(p, position: _position, duration: _duration);
       if (p) {
         _retries = 0;
         _scheduleHide();
@@ -237,6 +250,7 @@ class _PlayerPageState extends State<PlayerPage> {
       s.cancel();
     }
     MprisService.instance.dispose();
+    MacMediaSession.instance.dispose();
     _player.dispose();
     super.dispose();
   }
