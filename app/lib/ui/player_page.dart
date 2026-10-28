@@ -64,6 +64,8 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _fullscreen = false;
   bool _controlsVisible = true;
   Timer? _hideTimer;
+  Timer? _retryTimer;
+  int _retries = 0;
   String? _osdText;
   String? _osdSubText;
   Timer? _osdTimer;
@@ -106,8 +108,12 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     }));
     _subs.add(_player.stream.playing.listen((p) {
-      setState(() => _playing = p);
+      setState(() {
+        _playing = p;
+        if (p) _error = null;
+      });
       if (p) {
+        _retries = 0;
         _scheduleHide();
       } else {
         _hideTimer?.cancel();
@@ -115,7 +121,7 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     }));
     _subs.add(_player.stream.volume.listen((v) => setState(() => _volume = v)));
-    _subs.add(_player.stream.error.listen((e) => setState(() => _error = e)));
+    _subs.add(_player.stream.error.listen(_onPlaybackError));
     _subs.add(_player.stream.width.listen(
         (w) => debugPrint('player: video width=$w')));
     _subs.add(_player.stream.height.listen(
@@ -134,14 +140,51 @@ class _PlayerPageState extends State<PlayerPage> {
     }));
 
     // Certains panneaux vérifient le User-Agent aussi sur le flux.
-    _player.open(Media(
-      widget.url,
-      httpHeaders: {'User-Agent': MizuConfig.userAgent},
-    ));
+    _openMedia();
 
     if (widget.tracksProgress) {
       _ticker = Timer.periodic(const Duration(seconds: 15), (_) => _saveProgress());
     }
+  }
+
+  Future<void> _openMedia() async {
+    try {
+      await _player.stop();
+    } catch (_) {
+      // Rien à arrêter.
+    }
+    await _player.open(Media(
+      widget.url,
+      httpHeaders: {'User-Agent': MizuConfig.userAgent},
+    ));
+  }
+
+  /// Erreur de lecture : nouvelle tentative après un court délai (les panneaux
+  /// Xtream coupent en 461 quand une connexion est encore occupée).
+  void _onPlaybackError(String error) {
+    setState(() => _error = error);
+    if (_retries >= 2) return;
+    _retries++;
+    _retryTimer?.cancel();
+    _retryTimer = Timer(const Duration(milliseconds: 2500), () {
+      if (!mounted) return;
+      setState(() => _error = null);
+      // Reprend au même endroit si l'échec survient en cours de lecture.
+      if (_position > const Duration(seconds: 5)) {
+        _pendingSeek = _position;
+      }
+      _openMedia();
+    });
+  }
+
+  String _friendlyError(String error) {
+    if (error.contains('461')) {
+      return 'Source occupée (limite de connexions). Nouvelle tentative…';
+    }
+    if (_retryTimer?.isActive ?? false) {
+      return 'Lecture impossible : $error — nouvelle tentative…';
+    }
+    return 'Lecture impossible : $error';
   }
 
   Future<void> _saveProgress() async {
@@ -169,6 +212,7 @@ class _PlayerPageState extends State<PlayerPage> {
   void dispose() {
     _ticker?.cancel();
     _hideTimer?.cancel();
+    _retryTimer?.cancel();
     _osdTimer?.cancel();
     _seekAccumTimer?.cancel();
     _saveProgress();
@@ -458,7 +502,7 @@ class _PlayerPageState extends State<PlayerPage> {
                 width: double.infinity,
                 color: theme.colorScheme.errorContainer,
                 padding: const EdgeInsets.all(12),
-                child: Text('Lecture impossible : $_error',
+                child: Text(_friendlyError(_error!),
                     style: TextStyle(color: theme.colorScheme.onErrorContainer)),
               ),
             if (showChrome) ..._chrome(theme),

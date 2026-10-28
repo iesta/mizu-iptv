@@ -7,7 +7,6 @@ import '../data/models.dart';
 import '../state/app_state.dart';
 import 'browse_page.dart';
 import 'continue_tab.dart';
-import 'debug_page.dart';
 import 'settings_page.dart';
 import 'favorites_tab.dart';
 import 'sources_tab.dart';
@@ -211,13 +210,6 @@ class _HomePageState extends State<HomePage>
               tooltip: 'Rafraîchir',
               onPressed: state.loading ? null : state.refresh,
               icon: const Icon(Icons.refresh),
-            ),
-            IconButton(
-              tooltip: 'Données brutes',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => DebugPage(state: state)),
-              ),
-              icon: const Icon(Icons.data_object),
             ),
             IconButton(
               tooltip: 'Préférences',

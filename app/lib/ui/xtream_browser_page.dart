@@ -6,6 +6,7 @@ import '../data/xtream_client.dart';
 import '../mizu_config.dart';
 import '../state/app_state.dart';
 import 'media_detail_page.dart';
+import 'catalog_options.dart';
 import 'sections.dart';
 import 'tv_focus.dart';
 import 'player_page.dart';
@@ -305,7 +306,7 @@ class _CatalogTabState extends State<_CatalogTab> {
       };
 
   String? _tmdbOf(Map<String, dynamic> item) {
-    final raw = item['tmdb_id']?.toString();
+    final raw = (item['tmdb_id'] ?? item['tmdb'])?.toString();
     if (raw == null || raw.isEmpty || raw == '0') return null;
     return raw;
   }
@@ -379,6 +380,21 @@ class _CatalogTabState extends State<_CatalogTab> {
         ),
       ));
     } else {
+      final tmdb = _tmdbOf(item);
+      final versions = <SeriesVersion>[];
+      if (tmdb != null) {
+        for (final other in _all) {
+          if (_tmdbOf(other) != tmdb) continue;
+          final otherId = int.tryParse(_id(other));
+          if (otherId == null) continue;
+          if (versions.any((v) => v.id == otherId)) continue;
+          versions.add(SeriesVersion(
+            id: otherId,
+            name: _name(other),
+            poster: _icon(other),
+          ));
+        }
+      }
       Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => MediaDetailPage(
           state: widget.state,
@@ -387,6 +403,7 @@ class _CatalogTabState extends State<_CatalogTab> {
           id: id,
           fallbackName: _name(item),
           fallbackPoster: _icon(item),
+          versions: versions,
         ),
       ));
     }
@@ -804,8 +821,8 @@ class _CatalogTabState extends State<_CatalogTab> {
                       ),
                     if (tmdb != null)
                       Positioned(
-                        top: 4,
-                        right: 4,
+                        top: 6,
+                        right: 6,
                         child: Material(
                           color: Colors.black54,
                           shape: const CircleBorder(),
@@ -815,10 +832,10 @@ class _CatalogTabState extends State<_CatalogTab> {
                             onTap: () =>
                                 widget.state.toggleFavorite(tmdb, _favoriteType),
                             child: Padding(
-                              padding: const EdgeInsets.all(6),
+                              padding: const EdgeInsets.all(8),
                               child: Icon(
                                 fav ? Icons.favorite : Icons.favorite_border,
-                                size: 16,
+                                size: 24,
                                 color: fav
                                     ? Theme.of(context).colorScheme.primary
                                     : Colors.white70,
@@ -846,16 +863,6 @@ class _CatalogTabState extends State<_CatalogTab> {
     );
   }
 }
-
-/// Choix de tri proposés dans le panneau d'affichage.
-const _sortOptions = <({String value, String label})>[
-  (value: 'recent', label: 'Ajout récent'),
-  (value: 'oldest', label: 'Ajout ancien'),
-  (value: 'name_asc', label: 'Nom A–Z'),
-  (value: 'name_desc', label: 'Nom Z–A'),
-  (value: 'rating_desc', label: 'Note + (meilleure)'),
-  (value: 'rating_asc', label: 'Note - (plus basse)'),
-];
 
 /// Panneau latéral droit (`endDrawer`) : options d'affichage du catalogue.
 class _CatalogSettingsDrawer extends StatelessWidget {
@@ -925,7 +932,7 @@ class _CatalogSettingsDrawer extends StatelessWidget {
               valueListenable: MizuConfig.catalogSortListenable,
               builder: (context, sort, _) => Column(
                 children: [
-                  for (final option in _sortOptions)
+                  for (final option in catalogSortOptions)
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(sort == option.value

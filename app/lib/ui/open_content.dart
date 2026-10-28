@@ -5,6 +5,15 @@ import '../data/xtream_client.dart';
 import '../state/app_state.dart';
 import 'media_detail_page.dart';
 
+/// Vrai si au moins un candidat de l'index pointe encore vers une source
+/// configurée sur le compte (sinon le contenu n'est plus lisible).
+bool entrySourceAvailable(IndexEntry entry, AppState state) {
+  for (final candidate in entry.candidates) {
+    if (state.sources.any((s) => s.id == candidate.sourceId)) return true;
+  }
+  return false;
+}
+
 /// Ouvre la fiche d'un contenu référencé par un id TMDB (favoris, reprise).
 ///
 /// L'index fournit les sources où le contenu existe ; on passe les clients

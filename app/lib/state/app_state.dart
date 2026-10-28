@@ -262,6 +262,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Supprime la reprise de lecture d'un contenu (ligne `serie_progress`).
+  Future<void> deleteProgress(String serieId) async {
+    final profile = _activeProfileId;
+    if (profile == null) return;
+    await Supabase.instance.client
+        .from('serie_progress')
+        .delete()
+        .eq('watch_profile_id', profile)
+        .eq('serie_id', serieId);
+    _progress = await repo.progress(profile);
+    notifyListeners();
+  }
+
   Future<void> signIn(String email, String password) async {
     _error = null;
     try {

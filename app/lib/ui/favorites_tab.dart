@@ -302,8 +302,13 @@ class _FavoriteTileState extends State<_FavoriteTile> {
             final meta = snap.data;
             final title = meta?.title ?? entry?.name ?? item.contentId;
             final poster = meta?.poster ?? entry?.poster;
-            final canOpen = isChannel ||
-                (entry != null && entry.candidates.isNotEmpty);
+            final hasEntry = entry != null && entry.candidates.isNotEmpty;
+            final sourceOk = isChannel ||
+                (entry != null &&
+                    entry.candidates.isNotEmpty &&
+                    entrySourceAvailable(entry, widget.state));
+            final sourceMissing = !isChannel && hasEntry && !sourceOk;
+            final canOpen = isChannel || sourceOk;
 
             void activate() {
               if (_opening) return;
@@ -393,7 +398,9 @@ class _FavoriteTileState extends State<_FavoriteTile> {
                                         if (_opening) 'Recherche…',
                                         if (meta?.year != null)
                                           '${meta!.year}',
-                                        if (entry != null &&
+                                        if (sourceMissing)
+                                          'source supprimée'
+                                        else if (entry != null &&
                                             entry.candidates.isNotEmpty)
                                           entry.candidates.first.sourceName
                                         else if (!isChannel)
@@ -403,8 +410,27 @@ class _FavoriteTileState extends State<_FavoriteTile> {
                                       overflow: TextOverflow.ellipsis,
                                       style: theme.textTheme.labelSmall
                                           ?.copyWith(
-                                              color: theme.colorScheme.outline),
+                                        color: sourceMissing
+                                            ? theme.colorScheme.error
+                                            : theme.colorScheme.outline,
+                                      ),
                                     ),
+                                    if (sourceMissing)
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: TextButton(
+                                          onPressed: _removing ? null : _remove,
+                                          style: TextButton.styleFrom(
+                                            padding: const EdgeInsets
+                                                .symmetric(horizontal: 6),
+                                            minimumSize: const Size(0, 30),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                          ),
+                                          child:
+                                              const Text('Retirer des favoris'),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),

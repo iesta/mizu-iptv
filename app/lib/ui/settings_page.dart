@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/metadata_service.dart';
 import '../mizu_config.dart';
 import '../state/app_state.dart';
+import 'debug_page.dart';
 import 'sections.dart';
 
 /// Préférences : backend Supabase, clé TMDB, compte.
@@ -414,25 +415,25 @@ class _SettingsPageState extends State<SettingsPage> {
         return _preferencesContent(theme);
       case _SettingsTab.account:
         return _accountContent(theme);
-      case _SettingsTab.server:
-        return _serverContent(theme);
       case _SettingsTab.metadata:
         return _metadataContent(theme);
+      case _SettingsTab.about:
+        return _aboutContent(theme);
     }
   }
 
   String _tabLabel(_SettingsTab tab) => switch (tab) {
         _SettingsTab.preferences => 'Préférences',
         _SettingsTab.account => 'Compte',
-        _SettingsTab.server => 'Synchro',
-        _SettingsTab.metadata => 'Métadonnées',
+        _SettingsTab.metadata => 'TMDB',
+        _SettingsTab.about => 'À propos',
       };
 
   IconData _tabIcon(_SettingsTab tab) => switch (tab) {
         _SettingsTab.preferences => Icons.tune,
         _SettingsTab.account => Icons.person_outline,
-        _SettingsTab.server => Icons.dns_outlined,
         _SettingsTab.metadata => Icons.movie_filter_outlined,
+        _SettingsTab.about => Icons.info_outline,
       };
 
   // ---------------------------------------------------------------------------
@@ -489,15 +490,17 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ] else
           Text('Aucun compte connecté.', style: theme.textTheme.bodyMedium),
+        const Divider(height: 40),
+        ..._synchroSection(theme),
+        const Divider(height: 40),
+        ..._rawSection(theme),
       ],
     );
   }
 
-  Widget _serverContent(ThemeData theme) {
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        Text('Synchro', style: theme.textTheme.headlineSmall),
+  List<Widget> _synchroSection(ThemeData theme) {
+    return [
+        Text('Synchro', style: theme.textTheme.titleLarge),
         const SizedBox(height: 6),
         Text(
           'Synchronise ton compte Zen IPTV : profils, sources, favoris et '
@@ -531,8 +534,7 @@ class _SettingsPageState extends State<SettingsPage> {
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.outline),
         ),
-      ],
-    );
+    ];
   }
 
   /// Ouvre un lien externe (navigateur / app).
@@ -548,7 +550,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Text('Métadonnées', style: theme.textTheme.headlineSmall),
+        Text('TMDB', style: theme.textTheme.headlineSmall),
         const SizedBox(height: 6),
         Text(
           'Clé TMDB (gratuite) pour les titres et affiches des favoris et de '
@@ -604,6 +606,114 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  List<Widget> _rawSection(ThemeData theme) {
+    final state = widget.state;
+    return [
+      Text('Données brutes', style: theme.textTheme.titleLarge),
+        const SizedBox(height: 6),
+        Text(
+          'Vue de diagnostic : profils, sources, favoris, progression et '
+          'préférences tels que lus depuis Supabase.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 20),
+        if (state != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => DebugPage(state: state)),
+              ),
+              icon: const Icon(Icons.data_object),
+              label: const Text('Ouvrir les données brutes'),
+            ),
+          )
+        else
+          Text(
+            'Connecte-toi pour consulter les données brutes.',
+            style: theme.textTheme.bodyMedium,
+          ),
+    ];
+  }
+
+  Widget _aboutContent(ThemeData theme) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.asset('assets/logo.png', width: 64, height: 64),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Mizu IPTV', style: theme.textTheme.headlineSmall),
+                Text(
+                  'Version 1.0.0',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.outline),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Client IPTV non officiel, interopérable avec un compte Zen IPTV. '
+          'Application de lecture uniquement : elle ne fournit aucun contenu.',
+          style: theme.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 16),
+        const Divider(),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.code),
+          title: const Text('Code source'),
+          subtitle: const Text('github.com/iesta/mizu-iptv'),
+          trailing: const Icon(Icons.open_in_new, size: 18),
+          onTap: () => _openUrl('https://github.com/iesta/mizu-iptv'),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.description_outlined),
+          title: const Text('Licence MIT'),
+          trailing: const Icon(Icons.open_in_new, size: 18),
+          onTap: () => _openUrl(
+              'https://github.com/iesta/mizu-iptv/blob/main/LICENSE'),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.bug_report_outlined),
+          title: const Text('Signaler un problème'),
+          trailing: const Icon(Icons.open_in_new, size: 18),
+          onTap: () => _openUrl('https://github.com/iesta/mizu-iptv/issues'),
+        ),
+        const Divider(),
+        const SizedBox(height: 8),
+        Text('Crédits', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Flutter · media_kit/libmpv · Supabase · TMDB. '
+          'Ce produit utilise l\'API TMDB mais n\'est ni approuvé ni certifié '
+          'par TMDB.',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Interopérabilité : reverse engineering par observation (API '
+          'publique, chaînes du binaire, données de notre propre compte). '
+          'Vérifie que la loi et les CGU t\'autorisent dans ton cas.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+      ],
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Éléments partagés.
   // ---------------------------------------------------------------------------
@@ -650,6 +760,34 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.network_check),
             label: const Text('Tester'),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: () {
+              setState(() => _ua.text = MizuConfig.zenUserAgent);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content:
+                      Text('User-Agent Zen appliqué — pense à Enregistrer.'),
+                ),
+              );
+            },
+            icon: const Icon(Icons.badge_outlined),
+            label: const Text('UA Zen'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () {
+              setState(() => _ua.text = MizuConfig.defaultUserAgent);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content:
+                      Text('User-Agent Mizu rétabli — pense à Enregistrer.'),
+                ),
+              );
+            },
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('UA Mizu'),
           ),
           const SizedBox(width: 12),
           if (_testResult != null)
@@ -805,7 +943,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
           const SizedBox(height: 28),
-          Text('Métadonnées', style: theme.textTheme.titleMedium),
+          Text('TMDB', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
             'Clé TMDB (gratuite) pour les titres et affiches des favoris et de '
@@ -906,4 +1044,4 @@ class _SettingsPageState extends State<SettingsPage> {
 }
 
 /// Onglets de la page Préférences (ordre d'affichage).
-enum _SettingsTab { preferences, account, server, metadata }
+enum _SettingsTab { preferences, account, metadata, about }

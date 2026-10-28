@@ -12,6 +12,16 @@ import 'player_page.dart';
 
 enum MediaKind { vod, serie }
 
+/// Une version d'une série (qualité/langue) : un `series_id` distinct pour un
+/// même contenu TMDB (ex. « X (FR) FHD » et « X (MULTI) FHD »).
+class SeriesVersion {
+  const SeriesVersion({required this.id, required this.name, this.poster});
+
+  final int id;
+  final String name;
+  final String? poster;
+}
+
 /// Épisode cible d'une reprise : celui en cours, ou le suivant s'il est fini.
 class _Target {
   const _Target(this.season, this.episode, this.position, {this.isNext = false});
@@ -37,6 +47,7 @@ class MediaDetailPage extends StatefulWidget {
     this.fallbackPoster,
     this.initialSeason,
     this.fallbackClients = const [],
+    this.versions = const [],
   });
 
   final AppState state;
@@ -48,6 +59,9 @@ class MediaDetailPage extends StatefulWidget {
 
   /// Saison à présélectionner (reprise de lecture).
   final int? initialSeason;
+
+  /// Versions connues de la série (même TMDB, `series_id` différents).
+  final List<SeriesVersion> versions;
 
   /// Clients de secours : si la source principale ne répond pas (HTTP 461,
   /// compte expiré…), on réessaie sur la suivante avec le même contenu.
@@ -62,6 +76,8 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
   Map<String, dynamic>? _data;
   Map<String, List<Map<String, dynamic>>> _episodes = {};
   int _season = 1;
+  int _seriesId = 0;
+  List<SeriesVersion> _versions = const [];
   String? _error;
   bool _loading = true;
   bool _autoPlayed = false;
@@ -78,6 +94,8 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
   @override
   void initState() {
     super.initState();
+    _seriesId = widget.id;
+    _versions = List<SeriesVersion>.of(widget.versions);
     _load();
   }
 
@@ -92,7 +110,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         _info = (json['info'] as Map?)?.cast<String, dynamic>();
         _data = (json['movie_data'] as Map?)?.cast<String, dynamic>();
       } else {
-        final json = await _client.seriesInfo(widget.id);
+        final json = await _client.seriesInfo(_seriesId);
         _info = (json['info'] as Map?)?.cast<String, dynamic>();
         _data = json;
         final rawEpisodes = json['episodes'];
@@ -118,6 +136,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+    if (widget.kind == MediaKind.serie && _versions.isEmpty) {
+      _loadVersions();
+    }
     _loadCredits();
     _maybeAutoPlay();
   }
@@ -139,6 +160,66 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       if (credits != null && !credits.isEmpty) _credits = credits;
       if (videos.isNotEmpty) _trailers = videos;
     });
+  }
+
+  /// Découvre les autres versions (même TMDB, `series_id` différents) quand
+  /// elles n'ont pas été fournies par le catalogue.
+  Future<void> _loadVersions() async {
+    final tmdb = _tmdbId;
+    final nameKey = _normalizeName(_title);
+    try {
+      final list = await _client.series();
+      final out = <SeriesVersion>[];
+      for (final raw in list) {
+        if (raw is! Map) continue;
+        final item = raw.cast<String, dynamic>();
+        final id = int.tryParse((item['series_id'] ?? '').toString());
+        if (id == null) continue;
+        final itemTmdb = (item['tmdb'] ?? item['tmdb_id'])?.toString();
+        final matches = (tmdb != null && itemTmdb == tmdb) ||
+            _normalizeName((item['name'] ?? '').toString()) == nameKey;
+        if (!matches) continue;
+        if (out.any((v) => v.id == id)) continue;
+        out.add(SeriesVersion(
+          id: id,
+          name: (item['name'] ?? '').toString(),
+          poster: (item['cover'] ?? item['stream_icon'])?.toString(),
+        ));
+      }
+      if (!mounted || out.isEmpty) return;
+      setState(() => _versions = out);
+    } catch (_) {
+      // Pas de sélecteur de version si la liste est indisponible.
+    }
+  }
+
+  /// Nom comparé sans qualité/version : « X (FR) FHD » → « x ».
+  static String _normalizeName(String raw) {
+    var name = raw.toLowerCase();
+    name = name.replaceAll(RegExp(r'\([^)]*\)'), ' ');
+    name = name.replaceAll(
+        RegExp(r'\b(fhd|uhd|4k|hd|sd|multi|vf|vostfr|fr|truefrench)\b'), ' ');
+    return name.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  /// Change de version (autre `series_id`) et recharge la fiche.
+  void _selectVersion(SeriesVersion version) {
+    if (version.id == _seriesId) return;
+    setState(() {
+      _seriesId = version.id;
+      _info = null;
+      _data = null;
+      _episodes = {};
+      _season = 1;
+      _credits = null;
+      _trailers = const [];
+      _backdrop = null;
+      _vote = null;
+      _cert = null;
+      _error = null;
+      _autoPlayed = true;
+    });
+    _load();
   }
 
   /// Saison ouverte par défaut : celle de l'épisode à reprendre, sinon celle
@@ -502,6 +583,8 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                         children: [
                           _header(theme, target),
                           if (widget.kind == MediaKind.serie)
+                            _versionsSection(theme),
+                          if (widget.kind == MediaKind.serie)
                             _episodesSection(theme),
                           _castSection(theme),
                           const SizedBox(height: 24),
@@ -691,24 +774,6 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
               )
             : null;
 
-    // Reprise possible : proposer aussi « Lecture du début » à côté.
-    final hasResume =
-        widget.kind == MediaKind.vod ? _resume != null : target != null;
-    final playFromStart = hasResume
-        ? OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 60),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              iconSize: 28,
-              textStyle: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            onPressed: () => _playOrResume(fromStart: true),
-            icon: const Icon(Icons.restart_alt),
-            label: const Text('Lecture du début'),
-          )
-        : null;
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -795,21 +860,91 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
             ],
           ),
         ),
-        if (play != null || playFromStart != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 24, right: 4),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                if (play != null) _HoverLift(child: play),
-                if (playFromStart != null) _HoverLift(child: playFromStart),
-              ],
-            ),
+        Padding(
+          padding: const EdgeInsets.only(left: 24, right: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (play != null) _HoverLift(child: play),
+              if (play != null) const SizedBox(width: 10),
+              _moreMenuButton(theme),
+            ],
           ),
+        ),
       ],
+    );
+  }
+
+  /// Bouton rond « … » : actions secondaires de la fiche.
+  Widget _moreMenuButton(ThemeData theme) {
+    final tmdb = _tmdbId;
+    final type = widget.kind == MediaKind.vod ? 'vod' : 'serie';
+    return ListenableBuilder(
+      listenable: widget.state,
+      builder: (context, _) {
+        final hasResume = _hasResume;
+        final favorite = tmdb != null && widget.state.isFavorite(tmdb, type);
+        final resumeSeconds = widget.kind == MediaKind.vod
+            ? (_resume?.watchTime ?? 0)
+            : (_target?.position ?? 0);
+        return MenuAnchor(
+          alignmentOffset: const Offset(0, 8),
+          menuChildren: [
+            MenuItemButton(
+              leadingIcon: const Icon(Icons.replay),
+              onPressed: () => _playOrResume(fromStart: true),
+              child: const Text('Jouer du début'),
+            ),
+            if (hasResume)
+              MenuItemButton(
+                leadingIcon: const Icon(Icons.play_arrow),
+                onPressed: () => _playOrResume(fromStart: false),
+                child: Text(
+                  resumeSeconds > 0
+                      ? 'Reprendre · ${_fmtResume(resumeSeconds)}'
+                      : 'Reprendre',
+                ),
+              ),
+            if (hasResume)
+              MenuItemButton(
+                leadingIcon: const Icon(Icons.remove_circle_outline),
+                onPressed: _clearProgress,
+                child: const Text('Annuler le suivi'),
+              ),
+            if (tmdb != null)
+              MenuItemButton(
+                leadingIcon:
+                    Icon(favorite ? Icons.favorite_border : Icons.favorite),
+                onPressed: () => widget.state.toggleFavorite(tmdb, type),
+                child: Text(
+                    favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'),
+              ),
+          ],
+          builder: (context, controller, child) => IconButton.filled(
+            iconSize: 28,
+            padding: const EdgeInsets.all(16),
+            constraints: const BoxConstraints(minWidth: 60, minHeight: 60),
+            tooltip: 'Plus d\'actions',
+            icon: const Icon(Icons.more_horiz),
+            onPressed: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+          ),
+        );
+      },
+    );
+  }
+
+  bool get _hasResume =>
+      widget.kind == MediaKind.vod ? _resume != null : _target != null;
+
+  Future<void> _clearProgress() async {
+    final tmdb = _tmdbId;
+    if (tmdb == null) return;
+    await widget.state.deleteProgress(tmdb);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Suivi annulé.')),
     );
   }
 
@@ -1177,6 +1312,46 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     final s = seconds.round();
     final m = s ~/ 60;
     return '$m:${(s % 60).toString().padLeft(2, '0')}';
+  }
+
+  /// Temps de reprise lisible : `1:23` ou `1:02:03`.
+  static String _fmtResume(double seconds) {
+    final total = seconds.round();
+    final h = total ~/ 3600;
+    final m = (total % 3600) ~/ 60;
+    final s = total % 60;
+    final ss = s.toString().padLeft(2, '0');
+    return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$ss' : '$m:$ss';
+  }
+
+  /// Sélecteur de version (qualité/langue) quand plusieurs `series_id`
+  /// partagent le même contenu TMDB.
+  Widget _versionsSection(ThemeData theme) {
+    if (widget.kind != MediaKind.serie || _versions.length < 2) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_pad, 4, _pad, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Version', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final version in _versions)
+                ChoiceChip(
+                  label: Text(version.name),
+                  selected: version.id == _seriesId,
+                  onSelected: (_) => _selectVersion(version),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _episodesSection(ThemeData theme) {

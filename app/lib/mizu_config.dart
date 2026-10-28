@@ -31,6 +31,10 @@ class MizuConfig {
   static const String defaultUserAgent = 'MizuIPTV/1.0 (Flutter)';
   static String userAgent = defaultUserAgent;
 
+  /// User-Agent IPTV standard (VLC), proposé par le bouton « UA Zen » des
+  /// préférences pour contourner les filtres de panneaux.
+  static const String zenUserAgent = 'VLC/3.0.20 LibVLC/3.0.20';
+
   /// Ordre d'affichage des sections du catalogue Xtream.
   ///
   /// Clés : `live` (Live TV), `vod` (Films), `serie` (Séries). Modifiable dans
@@ -95,6 +99,24 @@ class MizuConfig {
 
   static ValueListenable<String> get catalogSortListenable =>
       _catalogSortNotifier;
+
+  /// Mode d'affichage de l'onglet « Reprendre » : `list` (défaut) ou `grid`.
+  static const String defaultContinueView = 'list';
+  static const List<String> continueViewValues = ['list', 'grid'];
+
+  static final ValueNotifier<String> _continueViewNotifier =
+      ValueNotifier<String>(defaultContinueView);
+
+  static String get continueView => _continueViewNotifier.value;
+
+  static set continueView(String value) {
+    if (!continueViewValues.contains(value)) return;
+    if (_continueViewNotifier.value == value) return;
+    _continueViewNotifier.value = value;
+  }
+
+  static ValueListenable<String> get continueViewListenable =>
+      _continueViewNotifier;
 
   /// D'où vient la configuration (`env`, `config`, `build`, `env-file`,
   /// vide si aucune).
@@ -175,6 +197,8 @@ class MizuConfig {
       if (thumb is num) thumbSize = thumb.toDouble();
       final sort = data['catalog_sort']?.toString();
       if (sort != null) catalogSort = sort;
+      final view = data['continue_view']?.toString();
+      if (view != null) continueView = view;
     } catch (_) {
       // Fichier illisible : on continue avec les autres sources.
     }
@@ -282,6 +306,7 @@ class MizuConfig {
     List<String>? sectionOrder,
     double? thumbSize,
     String? catalogSort,
+    String? continueView,
   }) async {
     final before = (MizuConfig.backendUrl, MizuConfig.publishableKey);
 
@@ -328,6 +353,10 @@ class MizuConfig {
     if (catalogSort != null && catalogSortValues.contains(catalogSort)) {
       MizuConfig.catalogSort = catalogSort;
       data['catalog_sort'] = MizuConfig.catalogSort;
+    }
+    if (continueView != null && continueViewValues.contains(continueView)) {
+      MizuConfig.continueView = continueView;
+      data['continue_view'] = MizuConfig.continueView;
     }
 
     await configFile.parent.create(recursive: true);
