@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../data/catalog_index.dart';
-import '../data/m3u_playlist.dart';
 import '../data/metadata_service.dart';
 import '../data/models.dart';
-import '../data/xtream_client.dart';
 import '../mizu_config.dart';
 import '../state/app_state.dart';
 import 'open_content.dart';
-import 'player_page.dart';
 import 'tv_focus.dart';
+import 'cached_image.dart';
 
 /// Favoris du profil actif, répartis en trois colonnes : TV, Films, Séries.
 class FavoritesTab extends StatelessWidget {
@@ -45,6 +43,13 @@ class FavoritesTab extends StatelessWidget {
     }
   }
 
+  /// Trie les favoris du plus récent au plus ancien (`added_at`).
+  static int _recentFirst(FavoriteItem a, FavoriteItem b) {
+    final da = a.addedAt?.millisecondsSinceEpoch ?? 0;
+    final db = b.addedAt?.millisecondsSinceEpoch ?? 0;
+    return db.compareTo(da);
+  }
+
   Widget _buildContent(BuildContext context, List<String> order) {
     final theme = Theme.of(context);
     if (state.favorites.isEmpty) {
@@ -72,11 +77,15 @@ class FavoritesTab extends StatelessWidget {
       );
     }
 
+    // Les plus récents d'abord (added_at, puis ordre serveur).
     final channels =
-        state.favorites.where((f) => f.contentType == 'channel').toList();
-    final movies = state.favorites.where((f) => f.contentType == 'vod').toList();
+        state.favorites.where((f) => f.contentType == 'channel').toList()
+          ..sort(_recentFirst);
+    final movies = state.favorites.where((f) => f.contentType == 'vod').toList()
+      ..sort(_recentFirst);
     final series =
-        state.favorites.where((f) => f.contentType == 'serie').toList();
+        state.favorites.where((f) => f.contentType == 'serie').toList()
+          ..sort(_recentFirst);
 
     // Les colonnes suivent l'ordre choisi dans Préférences.
     final columns = [
@@ -224,7 +233,7 @@ class _FavoriteTileState extends State<_FavoriteTile> {
   Future<void> _openChannelBusy(String name) async {
     setState(() => _opening = true);
     try {
-      await _openChannel(context, widget.state, name);
+      await openChannel(context, widget.state, name);
     } finally {
       if (mounted) setState(() => _opening = false);
     }
@@ -368,7 +377,7 @@ class _FavoriteTileState extends State<_FavoriteTile> {
                                             color: theme.colorScheme.primary,
                                           ),
                                         )
-                                      : Image.network(
+                                      : CachedImage(
                                           poster,
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, _, _) => Container(
@@ -479,82 +488,3 @@ class _FavoriteTileState extends State<_FavoriteTile> {
   }
 }
 
-/// Résout une chaîne favorite (stockée par nom dans `favorites.content_id`)
-/// dans les sources du compte, puis lance le premier flux correspondant.
-Future<void> _openChannel(
-  BuildContext context,
-  AppState state,
-  String name,
-) async {
-  final wanted = name.trim().toLowerCase();
-  for (final source in state.sources) {
-    try {
-      if (source.isXtream) {
-        final client = XtreamClient(
-          baseUrl: source.endpoint,
-          username: source.username ?? '',
-          password: source.password ?? '',
-          userAgent: source.raw['user_agent']?.toString(),
-        );
-        try {
-          final streams = await client.liveStreams();
-          for (final raw in streams) {
-            if (raw is! Map) continue;
-            final item = raw.cast<String, dynamic>();
-            final label = (item['name'] ?? '').toString().trim();
-            if (label.toLowerCase() != wanted) continue;
-            final id = int.tryParse(
-              (item['stream_id'] ?? item['id'] ?? '').toString(),
-            );
-            if (id == null) continue;
-            final ext =
-                (item['container_extension']?.toString().isNotEmpty ?? false)
-                    ? item['container_extension'].toString()
-                    : 'ts';
-            if (!context.mounted) return;
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => PlayerPage(
-                state: state,
-                url: client.liveUrl(id, ext: ext),
-                title: label.isEmpty ? name : label,
-                subtitle: 'Direct',
-                contentId: name,
-                contentType: 'channel',
-              ),
-            ));
-            return;
-          }
-        } finally {
-          client.close();
-        }
-      } else {
-        final channels = await loadM3u(
-          source.endpoint,
-          userAgent: source.raw['user_agent']?.toString(),
-        );
-        for (final channel in channels) {
-          if (channel.name.trim().toLowerCase() != wanted) continue;
-          if (!context.mounted) return;
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => PlayerPage(
-              state: state,
-              url: channel.url,
-              title: channel.name,
-              subtitle: channel.group,
-              contentId: name,
-              contentType: 'channel',
-            ),
-          ));
-          return;
-        }
-      }
-    } catch (_) {
-      // Source indisponible ou expirée : on tente la suivante.
-    }
-  }
-  if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Chaîne « $name » introuvable dans tes sources.')),
-    );
-  }
-}

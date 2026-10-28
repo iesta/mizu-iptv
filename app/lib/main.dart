@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -43,9 +44,38 @@ class MizuApp extends StatefulWidget {
 
 class _MizuAppState extends State<MizuApp> {
   final ThemeController _themes = ThemeController();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  bool _settingsOpening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  /// Ctrl+, (ou ⌘+,) ouvre les préférences depuis n'importe quel écran.
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (event.logicalKey != LogicalKeyboardKey.comma) return false;
+    final keyboard = HardwareKeyboard.instance;
+    if (!keyboard.isControlPressed && !keyboard.isMetaPressed) return false;
+    _openSettings();
+    return true;
+  }
+
+  void _openSettings() {
+    final state = widget.state;
+    final navigator = _navigatorKey.currentState;
+    if (state == null || navigator == null || _settingsOpening) return;
+    _settingsOpening = true;
+    navigator
+        .push(MaterialPageRoute(builder: (_) => SettingsPage(state: state)))
+        .whenComplete(() => _settingsOpening = false);
+  }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
     _themes.dispose();
     super.dispose();
   }
@@ -76,6 +106,7 @@ class _MizuAppState extends State<MizuApp> {
         return MaterialApp(
           title: 'Mizu IPTV',
           debugShowCheckedModeBanner: false,
+          navigatorKey: _navigatorKey,
           theme: _themes.theme,
           home: home,
         );

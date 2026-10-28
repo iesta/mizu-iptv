@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../mizu_config.dart';
+import '../platform/mpris_service.dart';
 import '../state/app_state.dart';
 
 /// Lecteur basé sur libmpv (media_kit).
@@ -92,6 +94,20 @@ class _PlayerPageState extends State<PlayerPage> {
     );
     _controller = VideoController(_player);
 
+    if (Platform.isLinux) {
+      MprisService.instance.start(
+        title: widget.title,
+        subtitle: widget.subtitle,
+        onPlay: () => _player.play(),
+        onPause: () => _player.pause(),
+        onPlayPause: () => _player.playOrPause(),
+        onStop: () => _player.pause(),
+        onSeek: (offset) => _player.seek(_position + offset),
+        onSetPosition: (position) => _player.seek(position),
+        position: () => _position,
+      );
+    }
+
     _subs.add(_player.stream.position.listen((p) => setState(() => _position = p)));
     _subs.add(_player.stream.duration.listen((d) {
       setState(() {
@@ -112,6 +128,7 @@ class _PlayerPageState extends State<PlayerPage> {
         _playing = p;
         if (p) _error = null;
       });
+      MprisService.instance.setPlaying(p);
       if (p) {
         _retries = 0;
         _scheduleHide();
@@ -219,6 +236,7 @@ class _PlayerPageState extends State<PlayerPage> {
     for (final s in _subs) {
       s.cancel();
     }
+    MprisService.instance.dispose();
     _player.dispose();
     super.dispose();
   }
@@ -443,8 +461,27 @@ class _PlayerPageState extends State<PlayerPage> {
     if (key == LogicalKeyboardKey.space ||
         key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.gameButtonA) {
+        key == LogicalKeyboardKey.gameButtonA ||
+        key == LogicalKeyboardKey.mediaPlayPause) {
       _player.playOrPause();
+      return KeyEventResult.handled;
+    }
+    // Touches média du système (clavier / télécommande).
+    if (key == LogicalKeyboardKey.mediaPlay) {
+      _player.play();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.mediaPause ||
+        key == LogicalKeyboardKey.mediaStop) {
+      _player.pause();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.mediaFastForward) {
+      _seekBy(10);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.mediaRewind) {
+      _seekBy(-10);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowLeft) {

@@ -4,6 +4,7 @@ import '../data/m3u_playlist.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import 'player_page.dart';
+import 'cached_image.dart';
 
 /// Navigation dans une playlist M3U (source de type `m3u`).
 class BrowsePlaylistPage extends StatefulWidget {
@@ -150,7 +151,7 @@ class _BrowsePlaylistPageState extends State<BrowsePlaylistPage> {
                           : SizedBox(
                               width: 40,
                               height: 40,
-                              child: Image.network(
+                              child: CachedImage(
                                 c.logo!,
                                 fit: BoxFit.contain,
                                 errorBuilder: (_, _, _) =>

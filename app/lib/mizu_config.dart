@@ -118,6 +118,74 @@ class MizuConfig {
   static ValueListenable<String> get continueViewListenable =>
       _continueViewNotifier;
 
+  /// Accueil : onglet activable, blocs ordonnables et activables un par un.
+  static const bool defaultHomeEnabled = true;
+  static final ValueNotifier<bool> _homeEnabledNotifier =
+      ValueNotifier<bool>(defaultHomeEnabled);
+
+  static bool get homeEnabled => _homeEnabledNotifier.value;
+
+  static set homeEnabled(bool value) {
+    if (_homeEnabledNotifier.value == value) return;
+    _homeEnabledNotifier.value = value;
+  }
+
+  static ValueListenable<bool> get homeEnabledListenable =>
+      _homeEnabledNotifier;
+
+  static const List<String> homeBlockKeys = [
+    'latestMovies',
+    'latestSeries',
+    'trending',
+    'resumeMovies',
+    'resumeSeries',
+    'favoriteMovies',
+    'favoriteSeries',
+    'favoriteChannels',
+  ];
+  static const List<String> defaultHomeBlockOrder = homeBlockKeys;
+
+  static final ValueNotifier<List<String>> _homeBlockOrderNotifier =
+      ValueNotifier<List<String>>(List<String>.of(defaultHomeBlockOrder));
+  static final ValueNotifier<List<String>> _homeBlocksDisabledNotifier =
+      ValueNotifier<List<String>>(const []);
+
+  static List<String> get homeBlockOrder => _homeBlockOrderNotifier.value;
+
+  static set homeBlockOrder(List<String> value) {
+    final next = _sanitizeHomeOrder(value);
+    if (listEquals(next, _homeBlockOrderNotifier.value)) return;
+    _homeBlockOrderNotifier.value = next;
+  }
+
+  static List<String> get homeBlocksDisabled =>
+      _homeBlocksDisabledNotifier.value;
+
+  static set homeBlocksDisabled(List<String> value) {
+    final next = value.where(homeBlockKeys.contains).toSet().toList();
+    if (listEquals(next, _homeBlocksDisabledNotifier.value)) return;
+    _homeBlocksDisabledNotifier.value = next;
+  }
+
+  static bool isHomeBlockEnabled(String key) =>
+      !homeBlocksDisabled.contains(key);
+
+  static ValueListenable<List<String>> get homeBlockOrderListenable =>
+      _homeBlockOrderNotifier;
+  static ValueListenable<List<String>> get homeBlocksDisabledListenable =>
+      _homeBlocksDisabledNotifier;
+
+  static List<String> _sanitizeHomeOrder(List<String> raw) {
+    final out = <String>[];
+    for (final key in raw) {
+      if (homeBlockKeys.contains(key) && !out.contains(key)) out.add(key);
+    }
+    for (final key in homeBlockKeys) {
+      if (!out.contains(key)) out.add(key);
+    }
+    return out;
+  }
+
   /// D'où vient la configuration (`env`, `config`, `build`, `env-file`,
   /// vide si aucune).
   static String source = '';
@@ -199,6 +267,16 @@ class MizuConfig {
       if (sort != null) catalogSort = sort;
       final view = data['continue_view']?.toString();
       if (view != null) continueView = view;
+      final home = data['home_enabled'];
+      if (home is bool) homeEnabled = home;
+      final blockOrder = data['home_block_order'];
+      if (blockOrder is List) {
+        homeBlockOrder = blockOrder.map((e) => e.toString()).toList();
+      }
+      final blocksOff = data['home_blocks_disabled'];
+      if (blocksOff is List) {
+        homeBlocksDisabled = blocksOff.map((e) => e.toString()).toList();
+      }
     } catch (_) {
       // Fichier illisible : on continue avec les autres sources.
     }
@@ -307,6 +385,9 @@ class MizuConfig {
     double? thumbSize,
     String? catalogSort,
     String? continueView,
+    bool? homeEnabled,
+    List<String>? homeBlockOrder,
+    List<String>? homeBlocksDisabled,
   }) async {
     final before = (MizuConfig.backendUrl, MizuConfig.publishableKey);
 
@@ -357,6 +438,18 @@ class MizuConfig {
     if (continueView != null && continueViewValues.contains(continueView)) {
       MizuConfig.continueView = continueView;
       data['continue_view'] = MizuConfig.continueView;
+    }
+    if (homeEnabled != null) {
+      MizuConfig.homeEnabled = homeEnabled;
+      data['home_enabled'] = MizuConfig.homeEnabled;
+    }
+    if (homeBlockOrder != null) {
+      MizuConfig.homeBlockOrder = homeBlockOrder;
+      data['home_block_order'] = MizuConfig.homeBlockOrder;
+    }
+    if (homeBlocksDisabled != null) {
+      MizuConfig.homeBlocksDisabled = homeBlocksDisabled;
+      data['home_blocks_disabled'] = MizuConfig.homeBlocksDisabled;
     }
 
     await configFile.parent.create(recursive: true);

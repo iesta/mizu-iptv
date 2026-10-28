@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
+import '../mizu_config.dart';
 import '../state/app_state.dart';
 import 'browse_page.dart';
 import 'continue_tab.dart';
+import 'home_tab.dart';
 import 'settings_page.dart';
 import 'favorites_tab.dart';
 import 'sources_tab.dart';
@@ -25,9 +27,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+class _HomePageState extends State<HomePage> {
   int _initialTab = 0;
   bool _devRouteOpened = false;
 
@@ -35,11 +35,6 @@ class _HomePageState extends State<HomePage>
   void initState() {
     super.initState();
     _initialTab = int.tryParse(Platform.environment['MIZU_TAB'] ?? '') ?? 0;
-    _tabs = TabController(
-      length: 3,
-      vsync: this,
-      initialIndex: _initialTab.clamp(0, 2),
-    );
     if (Platform.environment['MIZU_ROUTE'] == null) return;
     if (widget.state.sources.isEmpty) {
       // Les sources arrivent après le premier rafraîchissement du compte.
@@ -155,104 +150,154 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
-  }
-
-  void _goTab(int index) {
-    final target = index.clamp(0, 2);
-    if (target != _tabs.index) _tabs.animateTo(target);
+  void _goTab(TabController controller, int delta) {
+    final target = (controller.index + delta).clamp(0, controller.length - 1);
+    if (target != controller.index) controller.animateTo(target);
   }
 
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
 
-    // Télécommande : CH+ / CH- (PageUp / PageDown) changent d'onglet.
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.pageUp): () => _goTab(_tabs.index - 1),
-        const SingleActivator(LogicalKeyboardKey.pageDown): () => _goTab(_tabs.index + 1),
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(7),
-                child: Image.asset('assets/logo.png', width: 26, height: 26),
-              ),
-              const SizedBox(width: 10),
-              const Text('Mizu IPTV'),
-            ],
+    return ListenableBuilder(
+      listenable: MizuConfig.homeEnabledListenable,
+      builder: (context, _) {
+        final tabs = <({String label, IconData icon, Widget view})>[
+          if (MizuConfig.homeEnabled)
+            (
+              label: 'Accueil',
+              icon: Icons.home_outlined,
+              view: HomeTab(state: state),
+            ),
+          (
+            label: 'Favoris',
+            icon: Icons.favorite_border,
+            view: FavoritesTab(state: state),
           ),
-          actions: [
-            if (state.profiles.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: state.activeProfileId,
-                    borderRadius: BorderRadius.circular(12),
-                    items: [
-                      for (final p in state.profiles)
-                        DropdownMenuItem(value: p.id, child: Text(p.name)),
+          (
+            label: 'Reprendre',
+            icon: Icons.play_circle_outline,
+            view: ContinueTab(state: state),
+          ),
+          (
+            label: 'Sources',
+            icon: Icons.dns_outlined,
+            view: SourcesTab(state: state),
+          ),
+        ];
+        final initial = _initialTab.clamp(0, tabs.length - 1);
+
+        return DefaultTabController(
+          key: ValueKey(tabs.length),
+          length: tabs.length,
+          initialIndex: initial,
+          child: Builder(
+            builder: (context) {
+              final controller = DefaultTabController.of(context);
+              // Télécommande : CH+ / CH- (PageUp / PageDown) changent d'onglet.
+              return CallbackShortcuts(
+                bindings: {
+                  const SingleActivator(LogicalKeyboardKey.pageUp): () =>
+                      _goTab(controller, -1),
+                  const SingleActivator(LogicalKeyboardKey.pageDown): () =>
+                      _goTab(controller, 1),
+                },
+                child: Scaffold(
+                  appBar: AppBar(
+                    title: Tooltip(
+                      message: 'Accueil',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        mouseCursor: SystemMouseCursors.click,
+                        onTap: () => controller.animateTo(0),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 4, horizontal: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(7),
+                                child: Image.asset('assets/logo.png',
+                                    width: 26, height: 26),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text('Mizu IPTV'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    actions: [
+                      if (state.profiles.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: state.activeProfileId,
+                              borderRadius: BorderRadius.circular(12),
+                              items: [
+                                for (final p in state.profiles)
+                                  DropdownMenuItem(
+                                      value: p.id, child: Text(p.name)),
+                              ],
+                              onChanged: (id) {
+                                if (id != null) state.selectProfile(id);
+                              },
+                            ),
+                          ),
+                        ),
+                      IconButton(
+                        tooltip: 'Rafraîchir',
+                        onPressed: state.loading ? null : state.refresh,
+                        icon: const Icon(Icons.refresh),
+                      ),
+                      IconButton(
+                        tooltip: 'Préférences',
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => SettingsPage(state: state)),
+                        ),
+                        icon: const Icon(Icons.settings_outlined),
+                      ),
                     ],
-                    onChanged: (id) {
-                      if (id != null) state.selectProfile(id);
-                    },
+                    bottom: TabBar(
+                      controller: controller,
+                      tabs: [
+                        for (final tab in tabs)
+                          Tab(icon: Icon(tab.icon), text: tab.label),
+                      ],
+                      indicatorSize: TabBarIndicatorSize.tab,
+                    ),
+                  ),
+                  body: Column(
+                    children: [
+                      if (state.loading)
+                        const LinearProgressIndicator(minHeight: 2),
+                      if (state.error != null)
+                        MaterialBanner(
+                          content: Text(state.error!),
+                          leading: const Icon(Icons.error_outline),
+                          actions: [
+                            TextButton(
+                                onPressed: state.refresh,
+                                child: const Text('Réessayer')),
+                          ],
+                        ),
+                      Expanded(
+                        child: TabBarView(
+                          controller: controller,
+                          children: [for (final tab in tabs) tab.view],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            IconButton(
-              tooltip: 'Rafraîchir',
-              onPressed: state.loading ? null : state.refresh,
-              icon: const Icon(Icons.refresh),
-            ),
-            IconButton(
-              tooltip: 'Préférences',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => SettingsPage(state: state)),
-              ),
-              icon: const Icon(Icons.settings_outlined),
-            ),
-          ],
-          bottom: TabBar(
-            controller: _tabs,
-            tabs: const [
-              Tab(icon: Icon(Icons.favorite_border), text: 'Favoris'),
-              Tab(icon: Icon(Icons.play_circle_outline), text: 'Reprendre'),
-              Tab(icon: Icon(Icons.dns_outlined), text: 'Sources'),
-            ],
-            indicatorSize: TabBarIndicatorSize.tab,
+              );
+            },
           ),
-        ),
-        body: Column(
-          children: [
-            if (state.loading) const LinearProgressIndicator(minHeight: 2),
-            if (state.error != null)
-              MaterialBanner(
-                content: Text(state.error!),
-                leading: const Icon(Icons.error_outline),
-                actions: [
-                  TextButton(onPressed: state.refresh, child: const Text('Réessayer')),
-                ],
-              ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  FavoritesTab(state: state),
-                  ContinueTab(state: state),
-                  SourcesTab(state: state),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 }

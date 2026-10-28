@@ -9,6 +9,7 @@ import '../data/models.dart';
 import '../data/xtream_client.dart';
 import '../state/app_state.dart';
 import 'player_page.dart';
+import 'cached_image.dart';
 
 enum MediaKind { vod, serie }
 
@@ -726,7 +727,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       fit: StackFit.expand,
       children: [
         if (backdrop != null)
-          Image.network(
+          CachedImage(
             backdrop,
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
@@ -961,7 +962,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
         height: 450,
         child: _poster == null
             ? fallback
-            : Image.network(
+            : CachedImage(
                 _poster!,
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => fallback,
@@ -1265,7 +1266,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
               height: 112,
               child: photo == null
                   ? _personPlaceholder(theme, person.name)
-                  : Image.network(
+                  : CachedImage(
                       photo,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) =>

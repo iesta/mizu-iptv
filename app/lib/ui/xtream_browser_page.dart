@@ -10,6 +10,7 @@ import 'catalog_options.dart';
 import 'sections.dart';
 import 'tv_focus.dart';
 import 'player_page.dart';
+import 'cached_image.dart';
 
 /// Navigation d'une source Xtream : Live TV, Films, Séries.
 class XtreamBrowserPage extends StatefulWidget {
@@ -717,7 +718,7 @@ class _CatalogTabState extends State<_CatalogTab> {
               : SizedBox(
                   width: 44,
                   height: 44,
-                  child: Image.network(
+                  child: CachedImage(
                     icon,
                     fit: BoxFit.contain,
                     errorBuilder: (_, _, _) =>
@@ -778,7 +779,7 @@ class _CatalogTabState extends State<_CatalogTab> {
                                   .surfaceContainerHighest,
                               child: const Icon(Icons.movie_outlined),
                             )
-                          : Image.network(
+                          : CachedImage(
                               icon,
                               fit: BoxFit.cover,
                               width: double.infinity,

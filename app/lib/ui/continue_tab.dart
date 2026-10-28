@@ -8,6 +8,7 @@ import '../state/app_state.dart';
 import 'catalog_options.dart';
 import 'open_content.dart';
 import 'tv_focus.dart';
+import 'cached_image.dart';
 
 /// Reprise de lecture : liste (défaut) ou grille avec covers, recherche, tri et
 /// taille de vignettes réglables.
@@ -467,7 +468,7 @@ class _ProgressTile extends StatelessWidget {
         ),
       );
     }
-    return Image.network(
+    return CachedImage(
       url,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => Container(
@@ -544,7 +545,7 @@ class _ProgressCard extends StatelessWidget {
                         ),
                       )
                     else
-                      Image.network(
+                      CachedImage(
                         poster!,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => Container(

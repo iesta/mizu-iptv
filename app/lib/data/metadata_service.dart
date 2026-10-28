@@ -36,6 +36,7 @@ class MetadataService {
 
   String? _apiKey;
   final Map<String, ContentMeta?> _memory = {};
+  final Map<String, List<ContentMeta>> _listsMemory = {};
   final Map<String, Credits?> _creditsMemory = {};
   final Map<String, String?> _certMemory = {};
   final Map<String, List<VideoTrailer>> _videosMemory = {};
@@ -132,6 +133,61 @@ class MetadataService {
     } catch (_) {
       _memory[key] = null;
       return null;
+    }
+  }
+
+  /// Liste TMDB (`movie/now_playing`, `tv/on_the_air`, `trending/all/week`…)
+  /// convertie en fiches. `forcedType` force `vod`/`serie` quand l'endpoint
+  /// ne renvoie pas `media_type`.
+  Future<List<ContentMeta>> fetchList(
+    String path, {
+    String? forcedType,
+  }) async {
+    if (!enabled) return const [];
+    final cached = _listsMemory[path];
+    if (cached != null) return cached;
+    try {
+      final sep = path.contains('?') ? '&' : '?';
+      final res = await _http.get(
+        Uri.parse('$_base/$path${sep}api_key=$_apiKey'),
+        headers: {'Accept': 'application/json'},
+      );
+      if (res.statusCode != 200) return const [];
+      final json =
+          jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final results = ((json['results'] as List?) ?? const []).whereType<Map>();
+      final out = <ContentMeta>[];
+      for (final raw in results) {
+        final item = raw.cast<String, dynamic>();
+        final media = item['media_type']?.toString();
+        final type = forcedType ??
+            (media == 'tv'
+                ? 'serie'
+                : media == 'movie'
+                    ? 'vod'
+                    : null);
+        if (type == null) continue;
+        final id = (item['id'] as num?)?.toInt();
+        if (id == null || id == 0) continue;
+        final title = (item['title'] ?? item['name'] ?? '').toString();
+        if (title.isEmpty) continue;
+        out.add(ContentMeta(
+          tmdbId: id,
+          type: type,
+          title: title,
+          originalTitle:
+              (item['original_title'] ?? item['original_name'])?.toString(),
+          posterPath: item['poster_path']?.toString(),
+          backdropPath: item['backdrop_path']?.toString(),
+          overview: item['overview']?.toString(),
+          year: _yearOf(item),
+          vote: (item['vote_average'] as num?)?.toDouble(),
+        ));
+      }
+      _listsMemory[path] = out;
+      return out;
+    } catch (_) {
+      return const [];
     }
   }
 

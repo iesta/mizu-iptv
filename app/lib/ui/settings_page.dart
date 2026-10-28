@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -9,6 +10,7 @@ import '../data/metadata_service.dart';
 import '../mizu_config.dart';
 import '../state/app_state.dart';
 import 'debug_page.dart';
+import 'home_blocks.dart';
 import 'sections.dart';
 
 /// Préférences : backend Supabase, clé TMDB, compte.
@@ -153,6 +155,98 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ],
     );
+  }
+
+  /// Accueil : onglet activable + blocs ordonnables et activables.
+  Widget _homeSectionEditor(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Accueil', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Affiche un onglet Accueil composé de blocs de covers. Chaque bloc '
+          'peut être activé/désactivé et réordonné.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Afficher l\'onglet Accueil'),
+          value: MizuConfig.homeEnabled,
+          onChanged: (value) {
+            setState(() => MizuConfig.homeEnabled = value);
+            MizuConfig.save(homeEnabled: value);
+          },
+        ),
+        const SizedBox(height: 8),
+        ValueListenableBuilder<List<String>>(
+          valueListenable: MizuConfig.homeBlockOrderListenable,
+          builder: (context, order, _) =>
+              ValueListenableBuilder<List<String>>(
+            valueListenable: MizuConfig.homeBlocksDisabledListenable,
+            builder: (context, disabled, _) => ReorderableListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
+              itemCount: order.length,
+              onReorderItem: _reorderHomeBlock,
+              itemBuilder: (context, index) {
+                final key = order[index];
+                final def = homeBlockDef(key);
+                final enabled = !disabled.contains(key);
+                return Card(
+                  key: ValueKey('home-$key'),
+                  margin: const EdgeInsets.symmetric(vertical: 3),
+                  child: ListTile(
+                    leading: Icon(def.icon),
+                    title: Text(def.label),
+                    subtitle: enabled ? null : const Text('Désactivé'),
+                    onTap: () => _toggleHomeBlock(key),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Switch(
+                          value: enabled,
+                          onChanged: (_) => _toggleHomeBlock(key),
+                        ),
+                        ReorderableDragStartListener(
+                          index: index,
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Icon(Icons.drag_handle),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _reorderHomeBlock(int oldIndex, int newIndex) {
+    final order = List<String>.of(MizuConfig.homeBlockOrder);
+    final item = order.removeAt(oldIndex);
+    order.insert(newIndex, item);
+    setState(() => MizuConfig.homeBlockOrder = order);
+    MizuConfig.save(homeBlockOrder: MizuConfig.homeBlockOrder);
+  }
+
+  void _toggleHomeBlock(String key) {
+    final disabled = List<String>.of(MizuConfig.homeBlocksDisabled);
+    if (disabled.contains(key)) {
+      disabled.remove(key);
+    } else {
+      disabled.add(key);
+    }
+    setState(() => MizuConfig.homeBlocksDisabled = disabled);
+    MizuConfig.save(homeBlocksDisabled: MizuConfig.homeBlocksDisabled);
   }
 
   Future<void> _clearCache() async {
@@ -321,33 +415,56 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     // Premier lancement : formulaire unique de configuration.
-    if (widget.firstRun) return _legacyBuild(context);
+    if (widget.firstRun) {
+      return Focus(
+        autofocus: true,
+        onKeyEvent: _onKey,
+        child: _legacyBuild(context),
+      );
+    }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Préférences')),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 760;
-          if (wide) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Préférences')),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 760;
+            if (wide) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _leftNav(theme),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: _tabContent(theme)),
+                ],
+              );
+            }
+            return Column(
               children: [
-                _leftNav(theme),
-                const VerticalDivider(width: 1),
+                _topNav(theme),
+                const Divider(height: 1),
                 Expanded(child: _tabContent(theme)),
               ],
             );
-          }
-          return Column(
-            children: [
-              _topNav(theme),
-              const Divider(height: 1),
-              Expanded(child: _tabContent(theme)),
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
+  }
+
+  /// Échap / Retour : quitte les préférences.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.goBack ||
+        key == LogicalKeyboardKey.browserBack) {
+      Navigator.of(context).maybePop();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   // ---------------------------------------------------------------------------
@@ -452,6 +569,8 @@ class _SettingsPageState extends State<SettingsPage> {
               ?.copyWith(color: theme.colorScheme.outline),
         ),
         const SizedBox(height: 20),
+        _homeSectionEditor(theme),
+        const SizedBox(height: 28),
         _sectionOrderEditor(theme),
         const SizedBox(height: 16),
         Text(
