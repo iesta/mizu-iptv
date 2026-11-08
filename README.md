@@ -13,6 +13,12 @@ Mizu ne la contourne pas, il la réutilise.
 > Application de lecture uniquement : elle ne fournit aucun contenu. Il te faut
 > ton propre abonnement IPTV et ton propre compte [Zen IPTV](https://zeniptv.app/).
 
+> ⚠️ **Android / Android TV : pas prêt.** Les APK se construisent et la
+> connexion fonctionne, mais la mise en page téléphone et la navigation à la
+> télécommande ne sont **pas finalisées** ; les APK publiés sont des aperçus
+> expérimentaux. Pour un usage quotidien, utilise **Linux** (ou macOS, dont la
+> lecture reste à valider). Détails : [Android / Android TV](#android--android-tv).
+
 <p align="center">
   <img src="docs/mizu-movies.png" alt="Mizu IPTV — catalogue Films (Android TV)" width="920">
 </p>
@@ -68,8 +74,9 @@ Lancer : `mizu` ou le menu Applications.
 Désinstallation : `~/.local/share/mizu/uninstall.sh`.
 
 > Les artefacts publiés sont **x86_64** (Linux), **arm64-v8a / armeabi-v7a /
-> x86_64** (Android) et **arm64** (macOS). Il n'y a **pas** de build Linux
-> arm64 : Flutter ne publie pas de SDK Linux arm64 (x86_64 uniquement).
+> x86_64** (Android) et **arm64** (macOS). Les APK Android sont **expérimentaux
+> et non prêts** (voir ci-dessous). Il n'y a **pas** de build Linux arm64 :
+> Flutter ne publie pas de SDK Linux arm64 (x86_64 uniquement).
 
 ### Autres méthodes
 
@@ -289,6 +296,12 @@ Mizu does not bypass it, it reuses it.
 > Playback only: it provides no content whatsoever. You need your own IPTV
 > subscription and your own [Zen IPTV](https://zeniptv.app/) account.
 
+> ⚠️ **Android / Android TV: not ready.** The APKs build and sign-in works, but
+> the phone layout and remote-control navigation are **not finished**; published
+> APKs are experimental previews. Use **Linux** (or macOS, whose playback is
+> still to be validated) for daily use. Details:
+> [Android / Android TV](#android--android-tv-1).
+
 <p align="center">
   <img src="docs/mizu-movies.png" alt="Mizu IPTV — Movies catalog (Android TV)" width="920">
 </p>
@@ -344,8 +357,9 @@ Run it: `mizu` or the Applications menu.
 Uninstall: `~/.local/share/mizu/uninstall.sh`.
 
 > Published artifacts are **x86_64** (Linux), **arm64-v8a / armeabi-v7a /
-> x86_64** (Android) and **arm64** (macOS). There is **no** Linux arm64 build:
-> Flutter does not ship a Linux arm64 SDK (x86_64 only).
+> x86_64** (Android) and **arm64** (macOS). Android APKs are **experimental and
+> not ready** (see below). There is **no** Linux arm64 build: Flutter does not
+> ship a Linux arm64 SDK (x86_64 only).
 
 ### Other methods
 
