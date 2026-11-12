@@ -50,11 +50,12 @@ lancement (ou `xattr -dr com.apple.quarantine "/Applications/Mizu IPTV.app"`).
 
 ## 2. Depuis les sources
 
-> **aarch64 / arm64** : pas de build Linux ARM. Flutter ne publie **pas** de SDK
-> Linux arm64 (les archives officielles sont x86_64 uniquement, vérifié sur
-> `releases_linux.json`). Il n'y a donc ni AppImage aarch64 ni support de
-> compilation sur une machine ARM, sauf à utiliser un SDK non officiel
-> (`flutter-elinux`, build depuis les sources).
+> **aarch64 / arm64** : il n'y a **pas d'AppImage arm64** (aucun SDK Flutter
+> Linux arm64 précompilé — vérifié sur `releases_linux.json`). En revanche le
+> build local **fonctionne** si tu disposes d'un SDK bootstrappé : c'est ce qui
+> est utilisé sur Asahi Linux (voir [`HANDOFF.md`](HANDOFF.md)), avec
+> `export PATH="$HOME/dev/tools/flutter/bin:$PATH"` puis
+> `./tools/install-linux.sh`.
 
 Installation **utilisateur, sans root** (`~/.local`), avec `tools/install-linux.sh`.
 
@@ -211,11 +212,12 @@ Apple notarization, macOS asks for *right-click → Open* on first launch (or
 
 ## 2. From source
 
-> **aarch64 / arm64**: no Linux ARM build. Flutter does **not** ship a Linux
-> arm64 SDK (official archives are x86_64 only, verified against
-> `releases_linux.json`). So there is no aarch64 AppImage and no compilation on
-> an ARM machine, unless you use an unofficial SDK (`flutter-elinux`, building
-> from source).
+> **aarch64 / arm64**: there is **no arm64 AppImage** (no prebuilt Linux arm64
+> Flutter SDK — verified against `releases_linux.json`). A local build **does**
+> work with a bootstrapped SDK: that is what we use on Asahi Linux (see
+> [`HANDOFF.md`](HANDOFF.md)), with
+> `export PATH="$HOME/dev/tools/flutter/bin:$PATH"` then
+> `./tools/install-linux.sh`.
 
 **Per-user** installation, no root (`~/.local`), via `tools/install-linux.sh`.
 
